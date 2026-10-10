@@ -49,13 +49,14 @@ def _css(theme: str) -> str:
 
 # Candidate spacings between date labels, smallest first.
 _TIME_STEPS = [
+    ("minute", 5), ("minute", 10), ("minute", 15), ("minute", 30),
     ("hour", 1), ("hour", 3), ("hour", 6), ("hour", 12),
     ("day", 1), ("day", 2), ("day", 7), ("day", 14),
     ("month", 1), ("month", 2), ("month", 3), ("month", 6),
     ("year", 1), ("year", 2), ("year", 5), ("year", 10), ("year", 25),
 ]
-_UNIT_SECONDS = {"hour": 3600, "day": 86400, "month": 30.44 * 86400, "year": 365.25 * 86400}
-_UNIT_FORMAT = {"hour": "%H:%M", "day": "%Y-%m-%d", "month": "%Y-%m", "year": "%Y"}
+_UNIT_SECONDS = {"minute": 60, "hour": 3600, "day": 86400, "month": 30.44 * 86400, "year": 365.25 * 86400}
+_UNIT_FORMAT = {"minute": "%H:%M", "hour": "%H:%M", "day": "%Y-%m-%d", "month": "%Y-%m", "year": "%Y"}
 
 
 
@@ -65,7 +66,7 @@ def label_room(label: str) -> float:
 
 
 def _format_for(unit: str, span: float) -> str:
-    if unit == "hour" and span > 86400:
+    if unit in ("minute", "hour") and span > 86400:
         return "%m-%d %H:%M"
     return _UNIT_FORMAT[unit]
 
@@ -84,7 +85,9 @@ def time_ticks(lo: float, hi: float, room: float) -> tuple[list[datetime], str]:
 
     unit, step = next(((u, n) for u, n in _TIME_STEPS if fits(u, n)), _TIME_STEPS[-1])
     t = datetime.fromtimestamp(lo, timezone.utc)
-    if unit == "hour":
+    if unit == "minute":
+        t = t.replace(minute=t.minute - t.minute % step, second=0, microsecond=0)
+    elif unit == "hour":
         t = t.replace(hour=t.hour - t.hour % step, minute=0, second=0, microsecond=0)
     elif unit == "day":
         t = t.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -97,7 +100,9 @@ def time_ticks(lo: float, hi: float, room: float) -> tuple[list[datetime], str]:
     while t.timestamp() <= hi:
         if t.timestamp() >= lo:
             ticks.append(t)
-        if unit == "hour":
+        if unit == "minute":
+            t += timedelta(minutes=step)
+        elif unit == "hour":
             t += timedelta(hours=step)
         elif unit == "day":
             t += timedelta(days=step)
