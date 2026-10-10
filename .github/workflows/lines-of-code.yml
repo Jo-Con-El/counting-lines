@@ -21,3 +21,5 @@ jobs:
         with:
           svg: loc-history.svg
           branch: counting-lines
+          line-width: 1
+          slopes: true
