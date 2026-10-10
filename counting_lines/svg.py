@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from html import escape
 
 # Fixed slots so a language keeps its colour as long as its rank does.
@@ -41,6 +41,69 @@ def _css(theme: str) -> str:
         rules.append(block(theme))
     rules.append(f"text{{font-family:{FONT}}}")
     return "".join(rules)
+
+
+# Candidate spacings between date labels, smallest first.
+_TIME_STEPS = [
+    ("hour", 1), ("hour", 3), ("hour", 6), ("hour", 12),
+    ("day", 1), ("day", 2), ("day", 7), ("day", 14),
+    ("month", 1), ("month", 2), ("month", 3), ("month", 6),
+    ("year", 1), ("year", 2), ("year", 5), ("year", 10), ("year", 25),
+]
+_UNIT_SECONDS = {"hour": 3600, "day": 86400, "month": 30.44 * 86400, "year": 365.25 * 86400}
+_UNIT_FORMAT = {"hour": "%H:%M", "day": "%Y-%m-%d", "month": "%Y-%m", "year": "%Y"}
+
+
+
+def label_room(label: str) -> float:
+    """Horizontal pixels to reserve for an 11px axis label, gap included."""
+    return 6.6 * len(label) + 22
+
+
+def _format_for(unit: str, span: float) -> str:
+    if unit == "hour" and span > 86400:
+        return "%m-%d %H:%M"
+    return _UNIT_FORMAT[unit]
+
+
+def time_ticks(lo: float, hi: float, room: float) -> tuple[list[datetime], str]:
+    """Round calendar instants (UTC) between two timestamps whose labels fit in
+    ``room`` pixels, as many as possible.
+
+    Returns the instants and the strftime format that suits their spacing.
+    """
+    span = max(hi - lo, 1)
+
+    def fits(unit: str, step: int) -> bool:
+        sample = datetime(2000, 12, 28, 23, 59).strftime(_format_for(unit, span))
+        return span / (_UNIT_SECONDS[unit] * step) * label_room(sample) <= room
+
+    unit, step = next(((u, n) for u, n in _TIME_STEPS if fits(u, n)), _TIME_STEPS[-1])
+    t = datetime.fromtimestamp(lo, timezone.utc)
+    if unit == "hour":
+        t = t.replace(hour=t.hour - t.hour % step, minute=0, second=0, microsecond=0)
+    elif unit == "day":
+        t = t.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif unit == "month":
+        t = t.replace(month=t.month - (t.month - 1) % step, day=1, hour=0, minute=0, second=0, microsecond=0)
+    else:
+        t = t.replace(year=t.year - t.year % step, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    ticks = []
+    while t.timestamp() <= hi:
+        if t.timestamp() >= lo:
+            ticks.append(t)
+        if unit == "hour":
+            t += timedelta(hours=step)
+        elif unit == "day":
+            t += timedelta(days=step)
+        elif unit == "month":
+            months = t.month - 1 + step
+            t = t.replace(year=t.year + months // 12, month=months % 12 + 1)
+        else:
+            t = t.replace(year=t.year + step)
+
+    return ticks, _format_for(unit, span)
 
 
 def nice_ticks(vmax: float, count: int = 4) -> list[int]:
@@ -112,7 +175,11 @@ def render(
             last = max(last, t.timestamp())
             stamps.append(last)
         lo, hi = stamps[0], stamps[-1]
-        xs = [x0 + (s - lo) / ((hi - lo) or 1) * plot_w for s in stamps]
+
+        def sx(stamp: float) -> float:
+            return x0 + (stamp - lo) / ((hi - lo) or 1) * plot_w
+
+        xs = [sx(s) for s in stamps]
     else:
         n = len(points)
         xs = [x0 + i / max(1, n - 1) * plot_w for i in range(n)]
@@ -147,15 +214,25 @@ def render(
         parts.append(f'<line class="grid" x1="{x0}" x2="{x0 + plot_w}" y1="{y:.1f}" y2="{y:.1f}" stroke-width="1"/>')
         parts.append(f'<text class="muted" x="{x0 - 8}" y="{y + 4:.1f}" font-size="11" text-anchor="end">{fmt_num(t)}</text>')
 
-    # X labels.
-    span_days = (times[-1] - times[0]).total_seconds() / 86400
-    fmt = date_format or ("%H:%M" if span_days <= 2 else "%Y-%m-%d")
-    n_labels = min(6, len(keep))
-    for k in range(n_labels):
-        j = round(k * (len(keep) - 1) / max(1, n_labels - 1))
-        x = xs[j]
-        anchor = "start" if k == 0 else "end" if k == n_labels - 1 else "middle"
-        label = times[keep[j]].strftime(fmt)
+    # X labels: round calendar dates on a time axis, evenly spaced commits otherwise.
+    labels: list[tuple[float, str]] = []
+    if x_axis == "time" and hi > lo:
+        ticks_x, fmt = time_ticks(lo, hi, plot_w)
+        fmt = date_format or fmt
+        labels = [(sx(t.timestamp()), t.strftime(fmt)) for t in ticks_x]
+    else:
+        span_days = (times[-1] - times[0]).total_seconds() / 86400
+        fmt = date_format or ("%H:%M" if span_days <= 2 else "%Y-%m-%d")
+        room = label_room(times[0].strftime(fmt))
+        n_labels = min(max(2, int(plot_w // room)), len(keep))
+        for k in range(n_labels):
+            j = round(k * (len(keep) - 1) / max(1, n_labels - 1))
+            labels.append((xs[j], times[keep[j]].strftime(fmt)))
+    for x, label in labels:
+        parts.append(f'<line class="grid" x1="{x:.1f}" x2="{x:.1f}" y1="{pad_t}" y2="{y0}" stroke-width="1" stroke-opacity="0.5"/>')
+        # Keep labels inside the image: anchor them inwards near the edges.
+        half = 3.3 * len(label)
+        anchor = "start" if x - half < 4 else "end" if x + half > width - 4 else "middle"
         parts.append(f'<text class="muted" x="{x:.1f}" y="{y0 + 18}" font-size="11" text-anchor="{anchor}">{escape(label)}</text>')
 
     # Stacked areas, drawn top series first so lower ones overlay cleanly.

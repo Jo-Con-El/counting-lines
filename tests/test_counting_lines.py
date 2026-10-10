@@ -4,6 +4,7 @@ import os
 import subprocess
 import tempfile
 import unittest
+from datetime import datetime
 
 from counting_lines import cli, export, git, history, languages, svg
 from counting_lines.progress import Progress
@@ -256,6 +257,25 @@ class OutputTest(unittest.TestCase):
             self.assertTrue(f.read().startswith("globalThis.LOC_DATA = {"))
         with open(out("d.svg")) as f:
             self.assertIn("<svg", f.read())
+
+    def test_time_ticks_are_round_dates_that_fit(self):
+        def ticks(start, end, room=832):
+            lo = datetime.fromisoformat(start).timestamp()
+            hi = datetime.fromisoformat(end).timestamp()
+            found, fmt = svg.time_ticks(lo, hi, room)
+            return [t.strftime(fmt) for t in found]
+
+        months = ticks("2025-11-21T18:33:24-06:00", "2026-10-09T12:00:00-05:00")
+        self.assertEqual(months[0], "2025-12")
+        self.assertEqual(len(months), 11)
+        self.assertEqual(ticks("2014-08-23T00:00:00+00:00", "2026-08-21T00:00:00+00:00")[:3],
+                         ["2015", "2016", "2017"])
+        self.assertEqual(ticks("1997-04-26T00:00:00+00:00", "2026-01-01T00:00:00+00:00")[:2],
+                         ["1998", "2000"])
+        self.assertEqual(ticks("2025-11-21T06:00:00+00:00", "2025-11-21T18:00:00+00:00")[:2],
+                         ["06:00", "07:00"])
+        # Less room, fewer labels.
+        self.assertLess(len(ticks("2025-11-21T00:00:00+00:00", "2026-10-09T00:00:00+00:00", 300)), 11)
 
     def test_svg_handles_edge_cases(self):
         empty = {"languages": [], "points": []}
