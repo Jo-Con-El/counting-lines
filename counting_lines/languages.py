@@ -265,14 +265,16 @@ def _scanner(lang: Language) -> re.Pattern[str]:
             alts.append(f"(?P<line>{'|'.join(map(re.escape, lang.line))})")
         for q in lang.quotes:
             e = re.escape(q)
-            alts.append(f"(?:{e}(?:\\\\.|[^{e}\\\\])*(?:{e}|$))")
+            # Unrolled loop: runs of plain characters, then one escape at a time.
+            alts.append(f"(?:{e}[^{e}\\\\]*(?:\\\\.[^{e}\\\\]*)*(?:{e}|$))")
         pattern = _SCANNERS[lang.name] = re.compile("|".join(alts))
     return pattern
 
 
 def _unclosed_block(line: str, lang: Language) -> str | None:
     """Return the closer of a block comment left open at the end of a code line."""
-    if not lang.block:
+    # Most code lines contain no block opener at all: skip the scan.
+    if not any(start in line for start, _ in lang.block):
         return None
     scanner = _scanner(lang)
     pos = 0
