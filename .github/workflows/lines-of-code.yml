@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write  # to commit the chart
+  contents: write  # to publish the chart
 
 concurrency: lines-of-code
 
@@ -19,5 +19,5 @@ jobs:
       # This repository's own action, as of the commit being built.
       - uses: ./
         with:
-          svg: .github/loc-history.svg
-          commit: true
+          svg: loc-history.svg
+          branch: counting-lines
