@@ -84,7 +84,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # the action fetches the full history anyway, if needed
-      - uses: Jo-Con-El/counting-lines@main
+      - uses: Jo-Con-El/counting-lines@v1
         with:
           svg: .github/loc-history.svg
           commit: true
