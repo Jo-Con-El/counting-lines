@@ -1,0 +1,111 @@
+name: "counting-lines"
+description: "Chart lines of code over a repository's history, computed incrementally and cached between runs"
+branding:
+  icon: "trending-up"
+  color: "blue"
+
+inputs:
+  path:
+    description: "Repository to analyse, relative to the workspace"
+    default: "."
+  rev:
+    description: "Last commit to process; its first-parent chain is walked"
+    default: "HEAD"
+  svg:
+    description: "SVG chart to write, relative to the workspace (empty: none)"
+    default: ".github/loc-history.svg"
+  json:
+    description: "JSON data to write (empty: none)"
+    default: ""
+  js:
+    description: "JavaScript data to write (empty: none)"
+    default: ""
+  theme:
+    description: "SVG colours: auto (follows prefers-color-scheme), light or dark"
+    default: "auto"
+  style:
+    description: "SVG style: areas (stacked by language), lines, or total"
+    default: "areas"
+  slopes:
+    description: "Join commits with straight lines instead of steps"
+    default: "false"
+  top:
+    description: "Languages shown before grouping the rest as 'Other'"
+    default: "6"
+  title:
+    description: "SVG title"
+    default: "Lines of code over time"
+  x-axis:
+    description: "SVG horizontal axis: time or commits"
+    default: "time"
+  date-format:
+    description: "strftime format for the SVG date labels (empty: automatic)"
+    default: ""
+  exclude:
+    description: "Paths to exclude, one pattern per line (see the README)"
+    default: ""
+  no-default-excludes:
+    description: "Do not apply the default exclusions"
+    default: "false"
+  include-lang:
+    description: "Comma-separated languages to report (empty: all)"
+    default: ""
+  dedupe:
+    description: "Count identical files once per commit"
+    default: "false"
+  commit:
+    description: "Commit and push the generated files if they changed (needs contents: write)"
+    default: "false"
+  commit-message:
+    description: "Message for that commit"
+    default: "Update lines-of-code chart [skip ci]"
+
+outputs:
+  changed:
+    description: "'true' if any generated file differs from the committed version"
+    value: ${{ steps.publish.outputs.changed }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Restore the counting-lines cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.temp }}/counting-lines
+        # Caches are immutable: save a new one per run, restore the latest.
+        key: counting-lines-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: counting-lines-${{ runner.os }}-
+
+    - name: Count lines of code
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        CACHE_FILE: ${{ runner.temp }}/counting-lines/cache.json.gz
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_REV: ${{ inputs.rev }}
+        INPUT_SVG: ${{ inputs.svg }}
+        INPUT_JSON: ${{ inputs.json }}
+        INPUT_JS: ${{ inputs.js }}
+        INPUT_THEME: ${{ inputs.theme }}
+        INPUT_STYLE: ${{ inputs.style }}
+        INPUT_SLOPES: ${{ inputs.slopes }}
+        INPUT_TOP: ${{ inputs.top }}
+        INPUT_TITLE: ${{ inputs.title }}
+        INPUT_X_AXIS: ${{ inputs.x-axis }}
+        INPUT_DATE_FORMAT: ${{ inputs.date-format }}
+        INPUT_EXCLUDE: ${{ inputs.exclude }}
+        INPUT_NO_DEFAULT_EXCLUDES: ${{ inputs.no-default-excludes }}
+        INPUT_INCLUDE_LANG: ${{ inputs.include-lang }}
+        INPUT_DEDUPE: ${{ inputs.dedupe }}
+      run: bash "$ACTION_PATH/action/run.sh"
+
+    - name: Publish the generated files
+      id: publish
+      shell: bash
+      env:
+        INPUT_SVG: ${{ inputs.svg }}
+        INPUT_JSON: ${{ inputs.json }}
+        INPUT_JS: ${{ inputs.js }}
+        INPUT_COMMIT: ${{ inputs.commit }}
+        INPUT_COMMIT_MESSAGE: ${{ inputs.commit-message }}
+      run: bash "${{ github.action_path }}/action/publish.sh"

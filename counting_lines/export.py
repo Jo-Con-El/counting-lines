@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
 
 from .history import Point
 
@@ -33,7 +32,6 @@ def build_data(history: list[Point], rev: str, include_lang: list[str] | None = 
     order = sorted(seen, key=lambda lang: (-last.get(lang, [0])[0], lang))
     return {
         "generator": "counting-lines",
-        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "rev": rev,
         "languages": order,
         "points": points,

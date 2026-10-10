@@ -49,7 +49,7 @@ Main options:
 | --- | --- |
 | `-r, --rev REV` | Last commit to process (default `HEAD`). If it is already in the cached history, nothing is recomputed. |
 | `--cache FILE` / `--no-cache` | Where to keep the cache, or don't use one. |
-| `-x, --exclude PATTERN` | Exclude paths. Without `/` it matches any directory or file name (`node_modules`, `*.min.js`); with `/` it matches from the repository root (`docs/api`). Repeatable. |
+| `-x, --exclude PATTERN` | Exclude paths. Without `/` it matches any directory or file name (`node_modules`, `*.min.js`); with `/` it matches from the repository root (`docs/api`, or `/loc.svg` for a file at the root). Repeatable. |
 | `--no-default-excludes` | Don't apply the default exclusions (`package-lock.json`, `node_modules`, and `*.po`/`*.pot` translation catalogs). |
 | `--dedupe` | Count identical files (same content and language) only once per commit, like cloc does. Useful when a repository carries copies of the same files, such as backup folders. |
 | `-l, --include-lang LIST` | Report only these languages (`Python,C`). Applied when writing outputs; it does not invalidate the cache. |
@@ -60,10 +60,57 @@ Main options:
 | `--check` | Recount the tree at `--rev` from scratch and compare it with the incremental result. |
 | `-q, --quiet` | No messages. Otherwise, when stderr is a terminal, a progress line shows the current phase, how far along it is and the estimated time left. |
 
+## GitHub Action
+
+The repository is also a composite action. This workflow keeps
+`.github/loc-history.svg` up to date on every push to `main`:
+
+```yaml
+name: Lines of code
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write  # to commit the chart
+
+concurrency: lines-of-code  # one run at a time, so pushes do not race
+
+jobs:
+  chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # the action fetches the full history anyway, if needed
+      - uses: Jo-Con-El/counting-lines@main
+        with:
+          svg: .github/loc-history.svg
+          commit: true
+```
+
+Then show it in your README with `![Lines of code](.github/loc-history.svg)`.
+
+- The cache is kept between runs with `actions/cache`, so each run only
+  processes the new commits.
+- The generated files are never counted themselves, and a run whose last commit
+  only touches them (such as a scheduled run right after the previous chart
+  commit) changes nothing.
+- The chart commit is made by `github-actions[bot]` with `[skip ci]`; pushes
+  made with the default `GITHUB_TOKEN` do not trigger new workflow runs.
+- The `changed` output says whether any generated file changed, for workflows
+  that publish the files some other way (`commit: false`, the default).
+
+Inputs mirror the command line options: `path`, `rev`, `svg`, `json`, `js`,
+`theme`, `style`, `slopes`, `top`, `title`, `x-axis`, `date-format`, `exclude`
+(one pattern per line), `no-default-excludes`, `include-lang`, `dedupe`,
+`commit` and `commit-message`. See [action.yml](action.yml) for their defaults.
+
 ## Data format
 
 ```json
-{"generator": "counting-lines", "generated_at": "…", "rev": "<sha>",
+{"generator": "counting-lines", "rev": "<sha>",
  "languages": ["C", "Python"],
  "points": [
   {"sha": "…", "date": "2024-01-01T00:00:00+00:00", "code": 120, "comment": 30, "blank": 15,

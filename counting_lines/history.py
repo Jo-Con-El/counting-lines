@@ -102,10 +102,11 @@ class Cache:
 
 def is_excluded(path: str, patterns: list[str]) -> bool:
     """A pattern without '/' matches any path component (directory or file
-    name); one with '/' matches the full path or one of its leading directories."""
+    name); one with '/' (or starting with '/', to anchor a bare name) matches
+    from the root: the full path or one of its leading directories."""
     parts = path.split("/")
     for pat in patterns:
-        if "/" in pat.strip("/"):
+        if "/" in pat.strip("/") or pat.startswith("/"):
             pat = pat.strip("/")
             if any(fnmatch.fnmatchcase("/".join(parts[:i]), pat) for i in range(1, len(parts) + 1)):
                 return True

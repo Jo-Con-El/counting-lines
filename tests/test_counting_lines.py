@@ -108,6 +108,8 @@ class CountTest(unittest.TestCase):
         self.assertFalse(ex("src/docs/api/x.md", ["docs/api"]))
         self.assertTrue(ex("a/gen_x.c", ["gen_*"]))
         self.assertTrue(ex("po/es.po", history.DEFAULT_EXCLUDE))
+        self.assertTrue(ex("loc.svg", ["/loc.svg"]))
+        self.assertFalse(ex("docs/loc.svg", ["/loc.svg"]))
 
 
 class HistoryTest(unittest.TestCase):

@@ -105,6 +105,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.js:
         export.write_js(data, args.js, var=args.js_var, esm=args.js_esm)
     if args.svg:
+        os.makedirs(os.path.dirname(os.path.abspath(args.svg)), exist_ok=True)
         with open(args.svg, "w", encoding="utf-8") as f:
             f.write(svg.render(data, theme=args.theme, top=args.top, x_axis=args.x_axis,
                                title=args.title, date_format=args.date_format,
