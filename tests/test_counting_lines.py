@@ -314,6 +314,19 @@ class OutputTest(unittest.TestCase):
         self.assertEqual(len(steps), 6)
         self.assertEqual(len(slopes), 4)
 
+    def test_svg_total_style(self):
+        data = export.build_data([
+            history.Point("a" * 40, "2024-01-01T00:00:00+00:00", {"C": [10, 0, 0], "Go": [5, 0, 0]}),
+            history.Point("b" * 40, "2024-03-01T00:00:00+00:00", {"C": [30, 0, 0], "Go": [5, 0, 0]}),
+        ], "x")
+        doc = svg.render(data, style="total")
+        self.assertEqual(doc.count("<path "), 1)
+        self.assertIn('class="ln-total"', doc)
+        self.assertNotIn("<rect class=\"s", doc)  # no legend
+        self.assertIn("35 lines", doc)
+        one = export.build_data([history.Point("a" * 40, "2024-01-01T00:00:00+00:00", {"C": [1, 0, 0]})], "x")
+        self.assertIn('class="ln-total"', svg.render(one, style="total"))
+
     def test_svg_handles_edge_cases(self):
         empty = {"languages": [], "points": []}
         self.assertIn("No data", svg.render(empty))

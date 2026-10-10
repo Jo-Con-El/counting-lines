@@ -55,7 +55,7 @@ Main options:
 | `-l, --include-lang LIST` | Report only these languages (`Python,C`). Applied when writing outputs; it does not invalidate the cache. |
 | `--json FILE` | Data as JSON, one point per line. |
 | `--js FILE` | The same data as `globalThis.LOC_DATA = …` (`--js-var` changes the name, `--js-esm` emits an ES module). |
-| `--svg FILE` | Stacked area chart by language. `--theme auto` follows `prefers-color-scheme`; `light` and `dark` are also available. Counts are drawn as steps, since they only change at commits; `--slopes` joins commits with straight lines instead. See also `--top N`, `--x-axis time\|commits`, `--title`, `--date-format`. |
+| `--svg FILE` | Stacked area chart by language. `--theme auto` follows `prefers-color-scheme`; `light` and `dark` are also available. `--style total` draws only the total as a line, without the per-language areas. Counts are drawn as steps, since they only change at commits; `--slopes` joins commits with straight lines instead. See also `--top N`, `--x-axis time\|commits`, `--title`, `--date-format`. |
 | `-j, --jobs N` | Processes counting new blobs in parallel (default: all CPU cores). Each one keeps its own `git cat-file`; small incremental runs stay in a single process. |
 | `--check` | Recount the tree at `--rev` from scratch and compare it with the incremental result. |
 | `-q, --quiet` | No messages. Otherwise, when stderr is a terminal, a progress line shows the current phase, how far along it is and the estimated time left. |

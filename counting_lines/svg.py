@@ -31,6 +31,7 @@ def _css(theme: str) -> str:
             f".muted{{fill:{b['muted']}}}",
             f".grid{{stroke:{b['grid']}}}",
             f".s-other{{fill:{OTHER[mode]}}}",
+            f".ln-total{{stroke:{PALETTE[mode][0]}}}",
         ]
         lines += [f".s{i}{{fill:{c}}}" for i, c in enumerate(PALETTE[mode])]
         return "".join(lines)
@@ -136,7 +137,10 @@ def render(
     title: str = "Lines of code over time",
     date_format: str | None = None,
     slopes: bool = False,
+    style: str = "areas",
 ) -> str:
+    """Render the chart. ``style`` is "areas" (stacked by language) or
+    "total" (a single line with the total, no legend)."""
     points = data["points"]
     pad_l, pad_r, pad_t, pad_b = 52, 16, 40, 34
     legend_h = 22
@@ -248,6 +252,16 @@ def render(
                 out.append(f"{x:.1f},{sy(level(stacks[k - 1])):.1f}")
             out.append(f"{x:.1f},{sy(level(row)):.1f}")
         return out
+
+    if style == "total":
+        line = steps(lambda row: row[-1])
+        if len(xs) == 1:  # a single commit: draw a short tick
+            line = [f"{xs[0] - 2:.1f},{sy(stacks[0][-1]):.1f}", f"{xs[0] + 2:.1f},{sy(stacks[0][-1]):.1f}"]
+        parts.append(
+            f'<path class="ln-total" d="M{" L".join(line)}" fill="none" '
+            'stroke-width="2" stroke-linejoin="round"/>'
+        )
+        series = []  # the title already shows the total; no legend
 
     # Stacked areas, drawn top series first so lower ones overlay cleanly.
     for idx in reversed(range(len(series))):
