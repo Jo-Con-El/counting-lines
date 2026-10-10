@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from html import escape
+from typing import Callable
 
 # Fixed slots so a language keeps its colour as long as its rank does.
 PALETTE = {
@@ -235,10 +236,19 @@ def render(
         anchor = "start" if x - half < 4 else "end" if x + half > width - 4 else "middle"
         parts.append(f'<text class="muted" x="{x:.1f}" y="{y0 + 18}" font-size="11" text-anchor="{anchor}">{escape(label)}</text>')
 
+    def steps(level: Callable[[list[int]], float]) -> list[str]:
+        """Vertices of a step line: a count holds until the next commit."""
+        out = []
+        for k, (x, row) in enumerate(zip(xs, stacks)):
+            if k:
+                out.append(f"{x:.1f},{sy(level(stacks[k - 1])):.1f}")
+            out.append(f"{x:.1f},{sy(level(row)):.1f}")
+        return out
+
     # Stacked areas, drawn top series first so lower ones overlay cleanly.
     for idx in reversed(range(len(series))):
-        upper = [f"{x:.1f},{sy(row[idx]):.1f}" for x, row in zip(xs, stacks)]
-        lower = [f"{x:.1f},{sy(row[idx - 1] if idx else 0):.1f}" for x, row in zip(xs, stacks)]
+        upper = steps(lambda row: row[idx])
+        lower = steps(lambda row: row[idx - 1] if idx else 0)
         if len(xs) == 1:  # a single commit: draw a thin bar
             x = xs[0]
             upper = [f"{x - 2:.1f},{sy(stacks[0][idx]):.1f}", f"{x + 2:.1f},{sy(stacks[0][idx]):.1f}"]
