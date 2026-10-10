@@ -26,6 +26,9 @@ inputs:
   style:
     description: "SVG style: areas (stacked by language), lines, or total"
     default: "areas"
+  line-width:
+    description: "SVG line thickness in pixels, for the lines and total styles"
+    default: "2"
   slopes:
     description: "Join commits with straight lines instead of steps"
     default: "false"
@@ -89,6 +92,7 @@ runs:
         INPUT_THEME: ${{ inputs.theme }}
         INPUT_STYLE: ${{ inputs.style }}
         INPUT_SLOPES: ${{ inputs.slopes }}
+        INPUT_LINE_WIDTH: ${{ inputs.line-width }}
         INPUT_TOP: ${{ inputs.top }}
         INPUT_TITLE: ${{ inputs.title }}
         INPUT_X_AXIS: ${{ inputs.x-axis }}

@@ -1,3 +1,4 @@
+import contextlib
 import io
 import json
 import os
@@ -342,6 +343,13 @@ class OutputTest(unittest.TestCase):
         self.assertIn("<rect class=\"s0\"", doc)  # legend kept
         top = svg.render(data, style="lines", top=1)
         self.assertIn('class="ln-other"', top)
+
+    def test_svg_line_width(self):
+        data = export.build_data([history.Point("a" * 40, "2024-01-01T00:00:00+00:00", {"C": [1, 0, 0]})], "x")
+        self.assertIn('stroke-width="2"', svg.render(data, style="total"))
+        self.assertIn('stroke-width="3.5"', svg.render(data, style="lines", line_width=3.5))
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            cli.parse_args(["--line-width", "0"])
 
     def test_svg_handles_edge_cases(self):
         empty = {"languages": [], "points": []}

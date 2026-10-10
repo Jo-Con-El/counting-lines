@@ -49,6 +49,7 @@ args+=(--theme "${INPUT_THEME:-auto}" --style "${INPUT_STYLE:-areas}" --top "${I
 [ -n "${INPUT_DATE_FORMAT:-}" ] && args+=(--date-format "$INPUT_DATE_FORMAT")
 [ -n "${INPUT_INCLUDE_LANG:-}" ] && args+=(--include-lang "$INPUT_INCLUDE_LANG")
 [ "${INPUT_SLOPES:-false}" = "true" ] && args+=(--slopes)
+[ -n "${INPUT_LINE_WIDTH:-}" ] && args+=(--line-width "$INPUT_LINE_WIDTH")
 [ "${INPUT_DEDUPE:-false}" = "true" ] && args+=(--dedupe)
 [ "${INPUT_NO_DEFAULT_EXCLUDES:-false}" = "true" ] && args+=(--no-default-excludes)
 

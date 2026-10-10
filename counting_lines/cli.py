@@ -16,6 +16,13 @@ def default_cache_path(repo: str) -> str:
     return os.path.join(common, "counting-lines", "cache.json.gz")
 
 
+def positive_float(text: str) -> float:
+    value = float(text)
+    if not value > 0:
+        raise argparse.ArgumentTypeError(f"must be a positive number: {text}")
+    return value
+
+
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         prog="counting-lines",
@@ -53,6 +60,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     out.add_argument("--style", choices=["areas", "lines", "total"], default="areas",
                      help="SVG: areas stacked by language (default), the same as lines, "
                           "or one line with the total")
+    out.add_argument("--line-width", type=positive_float, default=2, metavar="PX",
+                     help="SVG line thickness in pixels for --style lines/total (default: 2)")
     out.add_argument("--slopes", action="store_true",
                      help="join commits with straight lines instead of steps in the SVG")
     p.add_argument("--check", action="store_true",
@@ -109,7 +118,8 @@ def main(argv: list[str] | None = None) -> int:
         with open(args.svg, "w", encoding="utf-8") as f:
             f.write(svg.render(data, theme=args.theme, top=args.top, x_axis=args.x_axis,
                                title=args.title, date_format=args.date_format,
-                               slopes=args.slopes, style=args.style))
+                               slopes=args.slopes, style=args.style,
+                               line_width=args.line_width))
     if not (args.json or args.js or args.svg):
         print_summary(data)
     return 0

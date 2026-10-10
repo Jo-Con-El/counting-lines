@@ -140,6 +140,7 @@ def render(
     date_format: str | None = None,
     slopes: bool = False,
     style: str = "areas",
+    line_width: float = 2,
 ) -> str:
     """Render the chart. ``style`` is "areas" (stacked by language), "lines"
     (the same stacking, drawn as one line per language) or "total" (a single
@@ -263,7 +264,7 @@ def render(
             y = sy(stacks[0][idx])
             line = [f"{xs[0] - 2:.1f},{y:.1f}", f"{xs[0] + 2:.1f},{y:.1f}"]
         return (f'<path class="{cls}" d="M{" L".join(line)}" fill="none" '
-                'stroke-width="2" stroke-linejoin="round"/>')
+                f'stroke-width="{line_width:g}" stroke-linejoin="round"/>')
 
     if style == "total":
         parts.append(line_path("ln-total", -1))
