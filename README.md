@@ -71,6 +71,63 @@ Main options:
 `languages` is ordered by lines of code at the last commit. Each `langs` entry
 is `[code, comment, blank]`.
 
+## Comparison with tokei and cloc
+
+Measured on an Apple M5 (10 cores) with git 2.55, tokei 15.0.0 and cloc 2.10.
+
+### Whole history
+
+Walking the first-parent chain. The checkout-per-commit columns are the
+approach of loc-graph-action (`git checkout` + counting the tree for every
+commit), estimated from a sample of sequential steps spread over the history
+(20 for tokei, 6 for cloc) in a local clone.
+
+| Repository | Commits | counting-lines, cold | No new commits | One new commit | Checkout + tokei per commit | Checkout + cloc per commit |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| e2fsprogs | 5,554 | 8.1 s | 0.22 s | 0.25 s | ~7 min | ~37 min |
+| klipper | 6,342 | 7.8 s | 0.28 s | 0.31 s | ~22 min | ~3.1 h |
+| BambuStudio | 10,554 | 57 s | 0.65 s | 0.72 s | ~53 min | ~8.5 h |
+
+A cold run counts each distinct blob once; after that, only new commits are
+processed.
+
+### A single tree
+
+Counting the tree at `HEAD` once (best of three runs; cloc ran once).
+
+| Repository | tokei | cloc | counting-lines |
+| --- | ---: | ---: | ---: |
+| e2fsprogs | 0.02 s | 0.63 s | 0.21 s |
+| klipper | 0.27 s | 3.78 s | 3.05 s |
+| BambuStudio | 0.16 s | 4.46 s | 1.94 s |
+
+tokei (Rust, multi-threaded) is much faster on one tree. counting-lines is
+single-threaded Python; it wins over a history because it never recounts an
+unchanged file.
+
+### Agreement with tokei
+
+`HEAD` tree, no exclusions, compared file by file.
+
+| Repository | tokei code lines | counting-lines code lines | Files counted by both | Same code/comment/blank split | Same total lines per file |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| e2fsprogs | 278,209 | 283,931 | 552 | 93.1% | 100% |
+| klipper | 2,395,685 | 2,411,643 | 2,163 | 93.8% | 100% |
+| BambuStudio | 3,182,856 | 3,161,310 | 8,436 | 95.1% | 100% |
+
+Where they differ:
+
+- **Which files are counted.** tokei treats generic `*.in` templates as
+  Autoconf and reads compiled `.mo` catalogs as Modelica source; counting-lines
+  skips both, and counts some files tokei ignores (Perl `.t` tests, generated
+  `configure` scripts).
+- **Classification choices.** tokei counts Markdown prose and blank lines
+  inside block comments as comments, and Python docstrings as code;
+  counting-lines follows cloc (code, blank and comment respectively).
+- **Parser edge cases.** tokei mistakes a `"` in a JavaScript regex literal
+  or in a C character literal (`'"'`) for the start of a string, and does not
+  close `/*/ … //*/` toggled blocks; counting-lines handles these.
+
 ## Limitations
 
 - Only the first-parent chain is walked: a merged branch shows up as a single
