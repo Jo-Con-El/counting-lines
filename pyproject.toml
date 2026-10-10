@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "counting-lines"
+version = "0.1.0"
+description = "Lines of code over a git repository's history, computed incrementally"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+counting-lines = "counting_lines.cli:main"
+
+[tool.setuptools]
+packages = ["counting_lines"]
