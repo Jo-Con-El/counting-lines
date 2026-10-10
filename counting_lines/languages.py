@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 
 # Bump whenever detection or counting rules change: cached per-blob stats
 # computed with an older version are discarded.
-RULES_VERSION = 1
+RULES_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -15,6 +16,9 @@ class Language:
     name: str
     line: tuple[str, ...] = ()
     block: tuple[tuple[str, str], ...] = ()
+    # String delimiters; comment markers between them are not comments.
+    # Strings are assumed to end at the end of the line.
+    quotes: tuple[str, ...] = ()
 
 
 @dataclass
@@ -27,11 +31,13 @@ class Stats:
         return [self.code, self.comment, self.blank]
 
 
-C_LIKE = dict(line=("//",), block=(("/*", "*/"),))
+C_LIKE = dict(line=("//",), block=(("/*", "*/"),), quotes=('"', "'"))
+C_LIKE_DQ = {**C_LIKE, "quotes": ('"',)}  # where ' is not a string (Rust lifetimes...)
+JS_LIKE = {**C_LIKE, "quotes": ('"', "'", "`")}
 HASH = dict(line=("#",))
 
 _LANGS = [
-    (Language("Python", line=("#",), block=(('"""', '"""'), ("'''", "'''"))), [".py", ".pyi", ".pyw"]),
+    (Language("Python", line=("#",), block=(('"""', '"""'), ("'''", "'''")), quotes=('"', "'")), [".py", ".pyi", ".pyw"]),
     (Language("C", **C_LIKE), [".c"]),
     (Language("C/C++ Header", **C_LIKE), [".h", ".hh", ".hpp", ".hxx"]),
     (Language("C++", **C_LIKE), [".cc", ".cpp", ".cxx", ".c++"]),
@@ -39,37 +45,37 @@ _LANGS = [
     (Language("Objective-C", **C_LIKE), [".m", ".mm"]),
     (Language("Java", **C_LIKE), [".java"]),
     (Language("Kotlin", **C_LIKE), [".kt", ".kts"]),
-    (Language("Scala", **C_LIKE), [".scala"]),
-    (Language("Swift", **C_LIKE), [".swift"]),
-    (Language("Go", **C_LIKE), [".go"]),
-    (Language("Rust", **C_LIKE), [".rs"]),
+    (Language("Scala", **C_LIKE_DQ), [".scala"]),
+    (Language("Swift", **C_LIKE_DQ), [".swift"]),
+    (Language("Go", **JS_LIKE), [".go"]),
+    (Language("Rust", **C_LIKE_DQ), [".rs"]),
     (Language("Zig", line=("//",)), [".zig"]),
     (Language("Dart", **C_LIKE), [".dart"]),
-    (Language("JavaScript", **C_LIKE), [".js", ".mjs", ".cjs", ".jsx"]),
-    (Language("TypeScript", **C_LIKE), [".ts", ".mts", ".cts", ".tsx"]),
-    (Language("PHP", line=("//", "#"), block=(("/*", "*/"),)), [".php"]),
-    (Language("CSS", block=(("/*", "*/"),)), [".css"]),
+    (Language("JavaScript", **JS_LIKE), [".js", ".mjs", ".cjs", ".jsx"]),
+    (Language("TypeScript", **JS_LIKE), [".ts", ".mts", ".cts", ".tsx"]),
+    (Language("PHP", line=("//", "#"), block=(("/*", "*/"),), quotes=('"', "'")), [".php"]),
+    (Language("CSS", block=(("/*", "*/"),), quotes=('"', "'")), [".css"]),
     (Language("SCSS", **C_LIKE), [".scss"]),
     (Language("Less", **C_LIKE), [".less"]),
     (Language("HTML", block=(("<!--", "-->"),)), [".html", ".htm"]),
     (Language("XML", block=(("<!--", "-->"),)), [".xml", ".xsd", ".xsl", ".svg"]),
-    (Language("Vue", line=("//",), block=(("<!--", "-->"), ("/*", "*/"))), [".vue"]),
-    (Language("Svelte", line=("//",), block=(("<!--", "-->"), ("/*", "*/"))), [".svelte"]),
+    (Language("Vue", line=("//",), block=(("<!--", "-->"), ("/*", "*/")), quotes=('"', "'", "`")), [".vue"]),
+    (Language("Svelte", line=("//",), block=(("<!--", "-->"), ("/*", "*/")), quotes=('"', "'", "`")), [".svelte"]),
     (Language("Ruby", line=("#",), block=(("=begin", "=end"),)), [".rb", ".rake", ".gemspec"]),
     (Language("Perl", **HASH), [".pl", ".pm", ".t"]),
     (Language("Bourne Shell", **HASH), [".sh", ".bash", ".zsh", ".ksh"]),
     (Language("Fish", **HASH), [".fish"]),
-    (Language("PowerShell", line=("#",), block=(("<#", "#>"),)), [".ps1", ".psm1"]),
-    (Language("Lua", line=("--",), block=(("--[[", "]]"),)), [".lua"]),
+    (Language("PowerShell", line=("#",), block=(("<#", "#>"),), quotes=('"', "'")), [".ps1", ".psm1"]),
+    (Language("Lua", line=("--",), block=(("--[[", "]]"),), quotes=('"', "'")), [".lua"]),
     (Language("R", **HASH), [".r", ".R"]),
-    (Language("Julia", line=("#",), block=(("#=", "=#"),)), [".jl"]),
-    (Language("Haskell", line=("--",), block=(("{-", "-}"),)), [".hs", ".lhs"]),
-    (Language("OCaml", block=(("(*", "*)"),)), [".ml", ".mli"]),
+    (Language("Julia", line=("#",), block=(("#=", "=#"),), quotes=('"',)), [".jl"]),
+    (Language("Haskell", line=("--",), block=(("{-", "-}"),), quotes=('"',)), [".hs", ".lhs"]),
+    (Language("OCaml", block=(("(*", "*)"),), quotes=('"',)), [".ml", ".mli"]),
     (Language("Elixir", **HASH), [".ex", ".exs"]),
     (Language("Erlang", line=("%",)), [".erl", ".hrl"]),
     (Language("Clojure", line=(";",)), [".clj", ".cljs", ".cljc", ".edn"]),
-    (Language("Lisp", line=(";",), block=(("#|", "|#"),)), [".lisp", ".el", ".scm"]),
-    (Language("SQL", line=("--",), block=(("/*", "*/"),)), [".sql"]),
+    (Language("Lisp", line=(";",), block=(("#|", "|#"),), quotes=('"',)), [".lisp", ".el", ".scm"]),
+    (Language("SQL", line=("--",), block=(("/*", "*/"),), quotes=('"', "'")), [".sql"]),
     (Language("Fortran", line=("!",)), [".f90", ".f95", ".f03", ".f08"]),
     (Language("Assembly", line=(";", "#", "//")), [".s", ".S", ".asm"]),
     (Language("Vim script", line=('"',)), [".vim"]),
@@ -82,8 +88,8 @@ _LANGS = [
     (Language("JSON"), [".json"]),
     (Language("Protocol Buffers", **C_LIKE), [".proto"]),
     (Language("GraphQL", **HASH), [".graphql", ".gql"]),
-    (Language("Terraform", line=("#", "//"), block=(("/*", "*/"),)), [".tf", ".tfvars"]),
-    (Language("Nix", line=("#",), block=(("/*", "*/"),)), [".nix"]),
+    (Language("Terraform", line=("#", "//"), block=(("/*", "*/"),), quotes=('"',)), [".tf", ".tfvars"]),
+    (Language("Nix", line=("#",), block=(("/*", "*/"),), quotes=('"',)), [".nix"]),
     (Language("CMake", **HASH), [".cmake"]),
     (Language("make", **HASH), [".mk", ".mak"]),
     (Language("Dockerfile", **HASH), [".dockerfile"]),
@@ -122,8 +128,9 @@ def is_binary(data: bytes) -> bool:
 def count(data: bytes, language: str) -> Stats:
     """Classify each line as code, comment or blank.
 
-    Like cloc, this is a heuristic: comment markers inside string literals are
-    not recognised as such, and Python docstrings count as comments.
+    Like cloc, this is a heuristic: comment markers inside single-line string
+    literals are skipped, but strings spanning several lines are not tracked,
+    and Python docstrings count as comments.
     """
     lang = LANGUAGES[language]
     stats = Stats()
@@ -177,19 +184,43 @@ def count(data: bytes, language: str) -> Stats:
     return stats
 
 
+_SCANNERS: dict[str, re.Pattern[str]] = {}
+
+
+def _scanner(lang: Language) -> re.Pattern[str]:
+    """One regex finding the next block opener, line comment or string.
+
+    At the same position, alternatives are tried in order, so block openers
+    win over quotes (Python's triple quotes) and over line markers.
+    """
+    pattern = _SCANNERS.get(lang.name)
+    if pattern is None:
+        alts = [f"(?P<b{i}>{re.escape(start)})" for i, (start, _) in enumerate(lang.block)]
+        if lang.line:
+            alts.append(f"(?P<line>{'|'.join(map(re.escape, lang.line))})")
+        for q in lang.quotes:
+            e = re.escape(q)
+            alts.append(f"(?:{e}(?:\\\\.|[^{e}\\\\])*(?:{e}|$))")
+        pattern = _SCANNERS[lang.name] = re.compile("|".join(alts))
+    return pattern
+
+
 def _unclosed_block(line: str, lang: Language) -> str | None:
+    """Return the closer of a block comment left open at the end of a code line."""
+    if not lang.block:
+        return None
+    scanner = _scanner(lang)
     pos = 0
-    while True:
-        found = [(line.find(s, pos), s, e) for s, e in lang.block]
-        found = [f for f in found if f[0] >= 0]
-        if not found:
+    while match := scanner.search(line, pos):
+        kind = match.lastgroup
+        if kind is None:  # a string literal
+            pos = match.end()
+        elif kind == "line":
             return None
-        idx, start, end = min(found)
-        # A line comment before the block opener hides it.
-        line_idx = min((i for i in (line.find(m, pos) for m in lang.line) if i >= 0), default=-1)
-        if 0 <= line_idx < idx:
-            return None
-        close = line.find(end, idx + len(start))
-        if close < 0:
-            return end
-        pos = close + len(end)
+        else:
+            end = lang.block[int(kind[1:])][1]
+            close = line.find(end, match.end())
+            if close < 0:
+                return end
+            pos = close + len(end)
+    return None

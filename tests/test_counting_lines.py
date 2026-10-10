@@ -53,6 +53,20 @@ class CountTest(unittest.TestCase):
     def test_python_docstring(self):
         self.check("Python", '"""Doc.\n\nMore."""\nimport os  # x\n\n# c\n', [1, 3, 2])
 
+    def test_comment_markers_inside_strings(self):
+        # From e2fsprogs contrib/fsstress.c: "/*" inside a string opens nothing.
+        self.check("C", 'sprintf(cmd, "rm -rf %s/*", d);\nsystem(cmd);\n', [2, 0, 0])
+        self.check("C", "if (ch != '\"') {\n/* c */\n}\n", [2, 1, 0])
+        self.check("C", 'puts("a\\"/*"); /* open\nstill */\n', [1, 1, 0])
+        self.check("JavaScript", "x = `/*`;\ny();\n", [2, 0, 0])
+        self.check("Python", "q = \"'''\"\nx = 1\n", [2, 0, 0])
+        # An unterminated quote runs to the end of the line, hiding later markers.
+        self.check("Rust", "fn f<'a>() {} /* c\n*/\n", [1, 1, 0])
+
+    def test_toggle_comment_trick(self):
+        # From BambuStudio CutSurface.cpp: "/*/" opens, "//*/" closes.
+        self.check("C++", "/*/\nold();\n//*/\nnew_();\n", [1, 3, 0])
+
     def test_no_trailing_newline(self):
         self.check("Python", "a = 1\nb = 2", [2, 0, 0])
 
