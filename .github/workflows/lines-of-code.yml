@@ -1,0 +1,23 @@
+name: Lines of code
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write  # to commit the chart
+
+concurrency: lines-of-code
+
+jobs:
+  chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # This repository's own action, as of the commit being built.
+      - uses: ./
+        with:
+          svg: .github/loc-history.svg
+          commit: true

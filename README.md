@@ -3,6 +3,8 @@
 Lines of code over a git repository's history, computed incrementally and
 without spawning a process per commit.
 
+![Lines of code in this repository](.github/loc-history.svg)
+
 Inspired by [loc-graph-action](https://github.com/botforge-pro/loc-graph-action),
 which runs `git checkout` and `cloc` over the whole tree for every commit.
 
