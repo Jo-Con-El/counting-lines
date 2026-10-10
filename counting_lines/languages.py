@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 # Bump whenever detection or counting rules change: cached per-blob stats
 # computed with an older version are discarded.
-RULES_VERSION = 3
+RULES_VERSION = 4
 
 
 @dataclass(frozen=True)
@@ -140,6 +140,50 @@ def detect(path: str) -> str | None:
         return _FILENAMES[base]
     ext = os.path.splitext(base)[1]
     return _EXTENSIONS.get(ext) or _EXTENSIONS.get(ext.lower())
+
+
+def may_have_shebang(path: str) -> bool:
+    """Files without an extension may be scripts identified by their shebang."""
+    base = path.rsplit("/", 1)[-1]
+    return base not in _FILENAMES and os.path.splitext(base)[1] == ""
+
+
+_INTERPRETERS = {
+    **dict.fromkeys(["sh", "bash", "dash", "zsh", "ksh", "mksh", "ash"], "Bourne Shell"),
+    **dict.fromkeys(["node", "nodejs", "deno", "bun"], "JavaScript"),
+    **dict.fromkeys(["awk", "gawk", "mawk", "nawk"], "AWK"),
+    **dict.fromkeys(["lua", "luajit"], "Lua"),
+    "python": "Python",
+    "pypy": "Python",
+    "perl": "Perl",
+    "ruby": "Ruby",
+    "fish": "Fish",
+    "php": "PHP",
+    "pwsh": "PowerShell",
+    "Rscript": "R",
+    "julia": "Julia",
+    "elixir": "Elixir",
+    "escript": "Erlang",
+    "make": "make",
+}
+
+
+def detect_shebang(data: bytes) -> str | None:
+    """Return the language named by a ``#!`` line, or None."""
+    if not data.startswith(b"#!"):
+        return None
+    words = data[2:256].split(b"\n", 1)[0].decode(errors="replace").split()
+    if not words:
+        return None
+    prog, args = words[0].rsplit("/", 1)[-1], words[1:]
+    if prog == "env":
+        # Skip env's own options and VAR=value assignments (env -S, env -i...).
+        args = [a for a in args if not a.startswith("-") and "=" not in a]
+        if not args:
+            return None
+        prog = args[0].rsplit("/", 1)[-1]
+    prog = re.sub(r"[\d.]+$", "", prog)  # python3.12 -> python
+    return _INTERPRETERS.get(prog)
 
 
 def is_binary(data: bytes) -> bool:

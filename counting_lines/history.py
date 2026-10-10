@@ -12,10 +12,13 @@ from typing import Callable
 
 from . import git, languages
 
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 
 # Lock files, vendored dependencies and translation catalogs.
 DEFAULT_EXCLUDE = ["package-lock.json", "node_modules", "*.po", "*.pot"]
+
+# Path language of extensionless files: the blob's shebang decides.
+SNIFF = "#!"
 
 
 @dataclass
@@ -40,6 +43,7 @@ class Cache:
     head: str | None = None
     files: dict[str, str] = field(default_factory=dict)  # path -> blob sha
     blobs: dict[str, list[int] | None] = field(default_factory=dict)  # "sha:lang" -> stats, None if binary
+    sniffed: dict[str, str | None] = field(default_factory=dict)  # blob sha -> shebang language
     history: list[Point] = field(default_factory=list)
 
     def reset(self) -> None:
@@ -62,6 +66,7 @@ class Cache:
             head=data["head"],
             files=data["files"],
             blobs=data["blobs"],
+            sniffed=data["sniffed"],
             history=[Point.from_json(p) for p in data["history"]],
         )
         if data.get("exclude") != exclude:
@@ -77,6 +82,7 @@ class Cache:
             "head": self.head,
             "files": self.files,
             "blobs": self.blobs,
+            "sniffed": self.sniffed,
             "history": [p.to_json() for p in self.history],
         }
         tmp = f"{path}.tmp"
@@ -99,22 +105,65 @@ def is_excluded(path: str, patterns: list[str]) -> bool:
     return False
 
 
+def path_language(path: str, exclude: list[str]) -> str | None:
+    """Language implied by a path: a name, SNIFF, or None if not counted."""
+    if is_excluded(path, exclude):
+        return None
+    if lang := languages.detect(path):
+        return lang
+    return SNIFF if languages.may_have_shebang(path) else None
+
+
+def _resolve(
+    blob: str, path_lang: str, blobs: dict, sniffed: dict
+) -> tuple[str, list[int]] | None:
+    """The language and stats of a blob found under a path language."""
+    lang = sniffed.get(blob) if path_lang == SNIFF else path_lang
+    stats = blobs.get(f"{blob}:{lang}") if lang else None
+    return (lang, stats) if stats is not None else None
+
+
+def _is_known(blob: str, path_lang: str, blobs: dict, sniffed: dict) -> bool:
+    if path_lang == SNIFF:
+        return blob in sniffed
+    return f"{blob}:{path_lang}" in blobs
+
+
+def _count_blobs(repo: str, wanted: dict[str, set[str]], blobs: dict, sniffed: dict) -> None:
+    """Read and count ``wanted`` (blob -> path languages) in one cat-file stream."""
+    for sha, data in git.read_blobs(repo, wanted):
+        binary = languages.is_binary(data)
+        langs = set(wanted[sha])
+        if SNIFF in langs:
+            langs.discard(SNIFF)
+            sniffed[sha] = lang = None if binary else languages.detect_shebang(data)
+            if lang:
+                langs.add(lang)
+        for lang in langs:
+            key = f"{sha}:{lang}"
+            if key not in blobs:
+                blobs[key] = None if binary else languages.count(data, lang).as_list()
+
+
 def snapshot(repo: str, rev: str, exclude: list[str]) -> dict[str, list[int]]:
     """Count a single tree from scratch, ignoring history and cache."""
     entries = []
+    wanted: dict[str, set[str]] = {}
     for mode, blob, path in git.ls_tree(repo, rev):
-        lang = None if is_excluded(path, exclude) else languages.detect(path)
-        if mode in git.FILE_MODES and lang:
-            entries.append((blob, lang))
-    blobs = dict(git.read_blobs(repo, {blob for blob, _ in entries}))
+        path_lang = path_language(path, exclude)
+        if mode in git.FILE_MODES and path_lang:
+            entries.append((blob, path_lang))
+            wanted.setdefault(blob, set()).add(path_lang)
+    blobs: dict = {}
+    sniffed: dict = {}
+    _count_blobs(repo, wanted, blobs, sniffed)
     totals: dict[str, list[int]] = {}
-    for blob, lang in entries:
-        if languages.is_binary(blobs[blob]):
-            continue
-        stats = languages.count(blobs[blob], lang).as_list()
-        acc = totals.setdefault(lang, [0, 0, 0])
-        for i in range(3):
-            acc[i] += stats[i]
+    for blob, path_lang in entries:
+        if resolved := _resolve(blob, path_lang, blobs, sniffed):
+            lang, stats = resolved
+            acc = totals.setdefault(lang, [0, 0, 0])
+            for i in range(3):
+                acc[i] += stats[i]
     return {k: v for k, v in sorted(totals.items()) if any(v)}
 
 
@@ -147,52 +196,45 @@ def update(
 
     log(f"{len(commits)} new commit(s) to process")
 
-    def language_of(path: str) -> str | None:
-        if is_excluded(path, cache.exclude):
-            return None
-        return languages.detect(path)
-
     # Count every blob we have never seen, in a single cat-file stream.
     # The same blob can show up under several languages (e.g. renamed .h -> .c).
     wanted: dict[str, set[str]] = {}
     for commit in commits:
         for change in commit.changes:
-            lang = language_of(change.path) if change.new_blob else None
-            if lang and f"{change.new_blob}:{lang}" not in cache.blobs:
-                wanted.setdefault(change.new_blob, set()).add(lang)
+            path_lang = path_language(change.path, cache.exclude) if change.new_blob else None
+            if path_lang and not _is_known(change.new_blob, path_lang, cache.blobs, cache.sniffed):
+                wanted.setdefault(change.new_blob, set()).add(path_lang)
 
     if wanted:
         log(f"reading {len(wanted)} new blob(s)")
-    for sha, data in git.read_blobs(repo, wanted):
-        binary = languages.is_binary(data)
-        for lang in wanted[sha]:
-            cache.blobs[f"{sha}:{lang}"] = None if binary else languages.count(data, lang).as_list()
+    _count_blobs(repo, wanted, cache.blobs, cache.sniffed)
 
     # Replay the diffs, keeping running totals per language.
     totals: dict[str, list[int]] = {}
 
-    def apply(path: str, blob: str, sign: int) -> None:
-        lang = language_of(path)
-        stats = cache.blobs.get(f"{blob}:{lang}") if lang else None
-        if stats is None:
+    def apply(blob: str, path_lang: str, sign: int) -> None:
+        resolved = _resolve(blob, path_lang, cache.blobs, cache.sniffed)
+        if resolved is None:
             return
+        lang, stats = resolved
         acc = totals.setdefault(lang, [0, 0, 0])
         for i in range(3):
             acc[i] += sign * stats[i]
 
     for path, blob in cache.files.items():
-        apply(path, blob, +1)
+        apply(blob, path_language(path, cache.exclude), +1)
 
     for commit in commits:
         for change in commit.changes:
-            if language_of(change.path) is None:
+            path_lang = path_language(change.path, cache.exclude)
+            if path_lang is None:
                 continue
             old = cache.files.pop(change.path, None)
             if old is not None:
-                apply(change.path, old, -1)
+                apply(old, path_lang, -1)
             if change.new_blob is not None:
                 cache.files[change.path] = change.new_blob
-                apply(change.path, change.new_blob, +1)
+                apply(change.new_blob, path_lang, +1)
         langs = {k: list(v) for k, v in sorted(totals.items()) if any(v)}
         cache.history.append(Point(commit.sha, commit.date, langs))
         cache.head = commit.sha

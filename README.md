@@ -78,8 +78,9 @@ is `[code, comment, blank]`.
 - The comment classifier is heuristic, like cloc's: comment markers inside
   string literals are not recognised as such, and Python docstrings count as
   comments.
-- Files with unknown extensions, binaries, symlinks and submodules are not
-  counted.
+- Files without an extension are identified by their shebang (`#!/bin/sh`,
+  `#!/usr/bin/env python3`...). Other files with unknown extensions, binaries,
+  symlinks and submodules are not counted.
 - `.fs` files are counted as GLSL shaders; F# is not supported.
 
 ## Tests

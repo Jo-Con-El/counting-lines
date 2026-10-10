@@ -80,6 +80,19 @@ class CountTest(unittest.TestCase):
         self.assertEqual(languages.detect("src/BUILD.bazel"), "Starlark")
         self.assertEqual(languages.detect("qhull/qhull.pro"), "qmake")
 
+    def test_shebang(self):
+        sb = languages.detect_shebang
+        self.assertEqual(sb(b"#!/bin/sh\necho\n"), "Bourne Shell")
+        self.assertEqual(sb(b"#!/usr/bin/env python3.12\n"), "Python")
+        self.assertEqual(sb(b"#!/usr/bin/env -S LC_ALL=C perl -w\n"), "Perl")
+        self.assertEqual(sb(b"#! /usr/bin/node\n"), "JavaScript")
+        self.assertIsNone(sb(b"#!/usr/bin/env\n"))
+        self.assertIsNone(sb(b"Copyright (c) 2024\n"))
+        self.assertTrue(languages.may_have_shebang("tools/run"))
+        self.assertTrue(languages.may_have_shebang(".bashrc"))
+        self.assertFalse(languages.may_have_shebang("Makefile"))
+        self.assertFalse(languages.may_have_shebang("notes.txt"))
+
     def test_m4_and_batch_comments(self):
         self.check("M4", "dnl c\nAC_INIT(x)\n# c\n", [1, 2, 0])
         self.check("Batch", "@echo off\nREM c\n:: c\n", [1, 2, 0])
@@ -120,6 +133,8 @@ class HistoryTest(unittest.TestCase):
         r = self.repo
         r.write("a.py", "import os\n\n# hi\nprint(1)\n")
         r.write("lib/x.h", "int f(void);\n")
+        r.write("tools/run", "#!/bin/sh\necho hi\necho there\n")
+        r.write("LICENSE", "Permission is hereby granted\n")
         r.commit("one")
         r.git("checkout", "-q", "-b", "feature")
         r.write("lib/y.c", "int y;\n/* c */\n")
@@ -135,6 +150,7 @@ class HistoryTest(unittest.TestCase):
         os.symlink("a.py", os.path.join(r.path, "link.py"))
         r.write("node_modules/dep.js", "var a;\n")
         r.write("notes.txt", "not code\n")
+        r.write("tools/run", "#!/usr/bin/env python3\nprint(1)\n")  # sh -> Python
         r.commit("rename and odd files")
         r.commit("empty")
         os.remove(os.path.join(r.path, "a.py"))
@@ -146,13 +162,14 @@ class HistoryTest(unittest.TestCase):
         points = self.run_update()
         self.assertEqual(len(points), 6)  # first-parent chain only
         self.assert_matches_snapshots(points)
-        self.assertEqual(points[-1]["langs"], {"C": [3, 0, 0], "JavaScript": [1, 0, 0], "Python": [2, 0, 0]})
+        self.assertEqual(points[0]["langs"]["Bourne Shell"], [2, 1, 0])
+        self.assertEqual(points[-1]["langs"], {"C": [3, 0, 0], "JavaScript": [1, 0, 0], "Python": [3, 1, 0]})
 
     def test_excludes(self):
         self.build_history()
         points = self.run_update(exclude=["node_modules", "lib/*.c"])
         self.assert_matches_snapshots(points, ["node_modules", "lib/*.c"])
-        self.assertEqual(points[-1]["langs"], {"Python": [2, 0, 0]})
+        self.assertEqual(points[-1]["langs"], {"Python": [3, 1, 0]})
 
     def test_resume_equals_cold_run(self):
         self.build_history()
@@ -181,9 +198,9 @@ class HistoryTest(unittest.TestCase):
     def test_exclude_change_invalidates_history(self):
         self.build_history()
         self.run_update()
-        points = self.run_update(exclude=["*.py"])
+        points = self.run_update(exclude=["*.py", "tools"])
         self.assertNotIn("Python", points[-1]["langs"])
-        self.assert_matches_snapshots(points, ["*.py"])
+        self.assert_matches_snapshots(points, ["*.py", "tools"])
 
 
 class OutputTest(unittest.TestCase):
