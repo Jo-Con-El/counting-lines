@@ -14,7 +14,8 @@ from . import git, languages
 
 CACHE_VERSION = 1
 
-DEFAULT_EXCLUDE = ["package-lock.json", "node_modules"]
+# Lock files, vendored dependencies and translation catalogs.
+DEFAULT_EXCLUDE = ["package-lock.json", "node_modules", "*.po", "*.pot"]
 
 
 @dataclass

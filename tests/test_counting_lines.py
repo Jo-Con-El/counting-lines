@@ -74,6 +74,15 @@ class CountTest(unittest.TestCase):
         self.assertEqual(languages.detect("src/Makefile"), "make")
         self.assertEqual(languages.detect("a/b.PY"), "Python")
         self.assertIsNone(languages.detect("README"))
+        self.assertEqual(languages.detect("resources/shaders/gouraud.fs"), "GLSL")
+        self.assertEqual(languages.detect("lib/Makefile.in"), "make")
+        self.assertEqual(languages.detect("configure.ac"), "Autoconf")
+        self.assertEqual(languages.detect("src/BUILD.bazel"), "Starlark")
+        self.assertEqual(languages.detect("qhull/qhull.pro"), "qmake")
+
+    def test_m4_and_batch_comments(self):
+        self.check("M4", "dnl c\nAC_INIT(x)\n# c\n", [1, 2, 0])
+        self.check("Batch", "@echo off\nREM c\n:: c\n", [1, 2, 0])
 
     def test_exclude(self):
         ex = history.is_excluded
@@ -82,6 +91,7 @@ class CountTest(unittest.TestCase):
         self.assertTrue(ex("docs/api/x.md", ["docs/api"]))
         self.assertFalse(ex("src/docs/api/x.md", ["docs/api"]))
         self.assertTrue(ex("a/gen_x.c", ["gen_*"]))
+        self.assertTrue(ex("po/es.po", history.DEFAULT_EXCLUDE))
 
 
 class HistoryTest(unittest.TestCase):

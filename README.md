@@ -50,7 +50,7 @@ Main options:
 | `-r, --rev REV` | Last commit to process (default `HEAD`). If it is already in the cached history, nothing is recomputed. |
 | `--cache FILE` / `--no-cache` | Where to keep the cache, or don't use one. |
 | `-x, --exclude PATTERN` | Exclude paths. Without `/` it matches any directory or file name (`node_modules`, `*.min.js`); with `/` it matches from the repository root (`docs/api`). Repeatable. |
-| `--no-default-excludes` | Don't apply the default exclusions (`package-lock.json`, `node_modules`). |
+| `--no-default-excludes` | Don't apply the default exclusions (`package-lock.json`, `node_modules`, and `*.po`/`*.pot` translation catalogs). |
 | `-l, --include-lang LIST` | Report only these languages (`Python,C`). Applied when writing outputs; it does not invalidate the cache. |
 | `--json FILE` | Data as JSON, one point per line. |
 | `--js FILE` | The same data as `globalThis.LOC_DATA = …` (`--js-var` changes the name, `--js-esm` emits an ES module). |
@@ -80,6 +80,7 @@ is `[code, comment, blank]`.
   comments.
 - Files with unknown extensions, binaries, symlinks and submodules are not
   counted.
+- `.fs` files are counted as GLSL shaders; F# is not supported.
 
 ## Tests
 

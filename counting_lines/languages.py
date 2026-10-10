@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 # Bump whenever detection or counting rules change: cached per-blob stats
 # computed with an older version are discarded.
-RULES_VERSION = 2
+RULES_VERSION = 3
 
 
 @dataclass(frozen=True)
@@ -93,12 +93,33 @@ _LANGS = [
     (Language("CMake", **HASH), [".cmake"]),
     (Language("make", **HASH), [".mk", ".mak"]),
     (Language("Dockerfile", **HASH), [".dockerfile"]),
+    # .fs is also F#, which is not supported; in practice it is mostly shaders.
+    (Language("GLSL", **C_LIKE), [".glsl", ".vert", ".frag", ".geom", ".tesc", ".tese", ".comp", ".vs", ".fs", ".gs"]),
+    (Language("qmake", **HASH), [".pro", ".pri"]),
+    (Language("Autoconf", line=("#", "dnl")), [".ac"]),
+    (Language("M4", line=("#", "dnl")), [".m4"]),
+    (Language("Batch", line=("::", "REM", "rem", "Rem", "@REM", "@rem")), [".bat", ".cmd"]),
+    (Language("AWK", **HASH), [".awk"]),
+    (Language("Linker Script", block=(("/*", "*/"),), quotes=('"',)), [".ld", ".lds"]),
+    (Language("OpenSCAD", **C_LIKE), [".scad"]),
+    (Language("Starlark", **HASH), [".bzl", ".star"]),
+    # Translation catalogs: counted, but excluded by default (see history.py).
+    (Language("PO File", **HASH), [".po", ".pot"]),
 ]
 
 _FILENAMES = {
     "Makefile": "make",
     "GNUmakefile": "make",
     "makefile": "make",
+    "Makefile.in": "make",
+    "Makefile.am": "make",
+    "configure.ac": "Autoconf",
+    "configure.in": "Autoconf",
+    "BUILD": "Starlark",
+    "BUILD.bazel": "Starlark",
+    "WORKSPACE": "Starlark",
+    "WORKSPACE.bazel": "Starlark",
+    "MODULE.bazel": "Starlark",
     "CMakeLists.txt": "CMake",
     "Dockerfile": "Dockerfile",
     "Containerfile": "Dockerfile",
