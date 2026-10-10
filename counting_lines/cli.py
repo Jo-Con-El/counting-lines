@@ -50,6 +50,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
                      help="SVG horizontal axis: commit time or commit index (default: time)")
     out.add_argument("--title", default="Lines of code over time", help="SVG title")
     out.add_argument("--date-format", help="strftime format for SVG date labels")
+    out.add_argument("--slopes", action="store_true",
+                     help="join commits with straight lines instead of steps in the SVG")
     p.add_argument("--check", action="store_true",
                    help="recount the tree at --rev from scratch and compare with the history")
     p.add_argument("-j", "--jobs", type=int, default=os.cpu_count() or 1,
@@ -102,7 +104,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.svg:
         with open(args.svg, "w", encoding="utf-8") as f:
             f.write(svg.render(data, theme=args.theme, top=args.top, x_axis=args.x_axis,
-                               title=args.title, date_format=args.date_format))
+                               title=args.title, date_format=args.date_format,
+                               slopes=args.slopes))
     if not (args.json or args.js or args.svg):
         print_summary(data)
     return 0

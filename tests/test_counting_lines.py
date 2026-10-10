@@ -302,6 +302,18 @@ class OutputTest(unittest.TestCase):
         # Less room, fewer labels.
         self.assertLess(len(ticks("2025-11-21T00:00:00+00:00", "2026-10-09T00:00:00+00:00", 300)), 11)
 
+    def test_svg_steps_or_slopes(self):
+        data = export.build_data([
+            history.Point("a" * 40, "2024-01-01T00:00:00+00:00", {"C": [10, 0, 0]}),
+            history.Point("b" * 40, "2024-03-01T00:00:00+00:00", {"C": [30, 0, 0]}),
+        ], "x")
+        path = lambda doc: doc.split('<path class="s0" d="M', 1)[1].split('"', 1)[0]
+        steps = path(svg.render(data)).split(" Z")[0].split(" L")
+        slopes = path(svg.render(data, slopes=True)).split(" Z")[0].split(" L")
+        # Upper edge then lower edge: a step adds a corner to each.
+        self.assertEqual(len(steps), 6)
+        self.assertEqual(len(slopes), 4)
+
     def test_svg_handles_edge_cases(self):
         empty = {"languages": [], "points": []}
         self.assertIn("No data", svg.render(empty))

@@ -135,6 +135,7 @@ def render(
     height: int = 300,
     title: str = "Lines of code over time",
     date_format: str | None = None,
+    slopes: bool = False,
 ) -> str:
     points = data["points"]
     pad_l, pad_r, pad_t, pad_b = 52, 16, 40, 34
@@ -237,10 +238,13 @@ def render(
         parts.append(f'<text class="muted" x="{x:.1f}" y="{y0 + 18}" font-size="11" text-anchor="{anchor}">{escape(label)}</text>')
 
     def steps(level: Callable[[list[int]], float]) -> list[str]:
-        """Vertices of a step line: a count holds until the next commit."""
+        """Vertices of a step line: a count holds until the next commit.
+
+        With ``slopes``, consecutive commits are joined by straight lines.
+        """
         out = []
         for k, (x, row) in enumerate(zip(xs, stacks)):
-            if k:
+            if k and not slopes:
                 out.append(f"{x:.1f},{sy(level(stacks[k - 1])):.1f}")
             out.append(f"{x:.1f},{sy(level(row)):.1f}")
         return out
