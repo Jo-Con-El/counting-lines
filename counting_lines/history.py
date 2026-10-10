@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import atexit
 import fnmatch
 import gzip
 import json
 import os
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Callable, Iterable
 
@@ -136,28 +138,75 @@ def _is_known(blob: str, path_lang: str, blobs: dict, sniffed: dict) -> bool:
     return f"{blob}:{path_lang}" in blobs
 
 
+# Below this many blobs, starting worker processes costs more than it saves.
+PARALLEL_MIN_BLOBS = 1000
+# Blobs per task: small enough to balance the load and report progress often.
+CHUNK_SIZE = 64
+
+
+def _count_one(sha: str, data: bytes, path_langs: set[str], blobs: dict, sniffed: dict) -> None:
+    binary = languages.is_binary(data)
+    langs = set(path_langs)
+    if SNIFF in langs:
+        langs.discard(SNIFF)
+        sniffed[sha] = lang = None if binary else languages.detect_shebang(data)
+        if lang:
+            langs.add(lang)
+    for lang in langs:
+        key = f"{sha}:{lang}"
+        if key not in blobs:
+            blobs[key] = None if binary else languages.count(data, lang).as_list()
+
+
+_worker_reader: git.BlobReader | None = None
+
+
+def _count_chunk(repo: str, chunk: list[tuple[str, set[str]]]) -> tuple[dict, dict]:
+    """Worker side: count a chunk with this process's own cat-file."""
+    global _worker_reader
+    if _worker_reader is None:
+        _worker_reader = git.BlobReader(repo)
+        atexit.register(_worker_reader.close)
+    blobs: dict = {}
+    sniffed: dict = {}
+    for sha, path_langs in chunk:
+        _count_one(sha, _worker_reader.read(sha), path_langs, blobs, sniffed)
+    return blobs, sniffed
+
+
 def _count_blobs(
     repo: str, wanted: dict[str, set[str]], blobs: dict, sniffed: dict,
-    progress: ProgressFn | None = None,
+    progress: ProgressFn | None = None, jobs: int = 1,
 ) -> None:
-    """Read and count ``wanted`` (blob -> path languages) in one cat-file stream."""
+    """Read and count ``wanted`` (blob -> path languages).
+
+    With ``jobs`` > 1 and enough blobs, worker processes share the work, each
+    with its own cat-file; otherwise a single cat-file stream feeds this process.
+    """
+    if jobs > 1 and len(wanted) >= PARALLEL_MIN_BLOBS:
+        items = list(wanted.items())
+        chunks = [items[i:i + CHUNK_SIZE] for i in range(0, len(items), CHUNK_SIZE)]
+        done = 0
+        with ProcessPoolExecutor(max_workers=jobs) as pool:
+            futures = {pool.submit(_count_chunk, repo, chunk): len(chunk) for chunk in chunks}
+            for future in as_completed(futures):
+                chunk_blobs, chunk_sniffed = future.result()
+                blobs.update(chunk_blobs)
+                sniffed.update(chunk_sniffed)
+                done += futures[future]
+                if progress:
+                    progress("counting blobs", done, len(wanted))
+        return
+
     for done, (sha, data) in enumerate(git.read_blobs(repo, wanted), 1):
         if progress:
             progress("counting blobs", done, len(wanted))
-        binary = languages.is_binary(data)
-        langs = set(wanted[sha])
-        if SNIFF in langs:
-            langs.discard(SNIFF)
-            sniffed[sha] = lang = None if binary else languages.detect_shebang(data)
-            if lang:
-                langs.add(lang)
-        for lang in langs:
-            key = f"{sha}:{lang}"
-            if key not in blobs:
-                blobs[key] = None if binary else languages.count(data, lang).as_list()
+        _count_one(sha, data, wanted[sha], blobs, sniffed)
 
 
-def snapshot(repo: str, rev: str, exclude: list[str], dedupe: bool = False) -> dict[str, list[int]]:
+def snapshot(
+    repo: str, rev: str, exclude: list[str], dedupe: bool = False, jobs: int = 1,
+) -> dict[str, list[int]]:
     """Count a single tree from scratch, ignoring history and cache."""
     entries = []
     wanted: dict[str, set[str]] = {}
@@ -168,7 +217,7 @@ def snapshot(repo: str, rev: str, exclude: list[str], dedupe: bool = False) -> d
             wanted.setdefault(blob, set()).add(path_lang)
     blobs: dict = {}
     sniffed: dict = {}
-    _count_blobs(repo, wanted, blobs, sniffed)
+    _count_blobs(repo, wanted, blobs, sniffed, jobs=jobs)
     totals: dict[str, list[int]] = {}
     seen: set[tuple[str, str]] = set()
     for blob, path_lang in entries:
@@ -205,6 +254,7 @@ def update(
     cache: Cache,
     log: Callable[[str], None] = _log,
     progress: ProgressFn | None = None,
+    jobs: int = 1,
 ) -> list[Point]:
     """Bring ``cache`` up to ``target`` and return the history ending there."""
     if cache.head == target:
@@ -246,7 +296,7 @@ def update(
 
     if wanted:
         log(f"reading {len(wanted)} new blob(s)")
-    _count_blobs(repo, wanted, cache.blobs, cache.sniffed, progress)
+    _count_blobs(repo, wanted, cache.blobs, cache.sniffed, progress, jobs)
 
     # Replay the diffs, keeping running totals per language. With dedupe, a
     # blob counts when its first copy appears and stops with its last one.

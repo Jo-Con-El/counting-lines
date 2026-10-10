@@ -223,6 +223,20 @@ class HistoryTest(unittest.TestCase):
         plain = [p["langs"]["JSON"][0] for p in self.run_update(dedupe=False)]
         self.assertEqual(plain, [300, 301, 201, 101])
 
+    def test_parallel_counting_matches_sequential(self):
+        self.build_history()
+        sequential = self.run_update()
+        old_min, old_chunk = history.PARALLEL_MIN_BLOBS, history.CHUNK_SIZE
+        history.PARALLEL_MIN_BLOBS, history.CHUNK_SIZE = 0, 2
+        self.addCleanup(setattr, history, "PARALLEL_MIN_BLOBS", old_min)
+        self.addCleanup(setattr, history, "CHUNK_SIZE", old_chunk)
+        cache = history.Cache([])
+        target = git.rev_parse(self.repo.path, "HEAD")
+        parallel = history.update(self.repo.path, target, cache, log=lambda _: None, jobs=2)
+        self.assertEqual([p.to_json() for p in parallel], sequential)
+        self.assertEqual(history.snapshot(self.repo.path, target, [], jobs=2),
+                         history.snapshot(self.repo.path, target, []))
+
     def test_cache_head_missing_from_repository(self):
         self.build_history()
         self.run_update()

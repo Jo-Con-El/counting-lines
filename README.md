@@ -56,6 +56,7 @@ Main options:
 | `--json FILE` | Data as JSON, one point per line. |
 | `--js FILE` | The same data as `globalThis.LOC_DATA = …` (`--js-var` changes the name, `--js-esm` emits an ES module). |
 | `--svg FILE` | Stacked area chart by language. `--theme auto` follows `prefers-color-scheme`; `light` and `dark` are also available. See also `--top N`, `--x-axis time\|commits`, `--title`, `--date-format`. |
+| `-j, --jobs N` | Processes counting new blobs in parallel (default: all CPU cores). Each one keeps its own `git cat-file`; small incremental runs stay in a single process. |
 | `--check` | Recount the tree at `--rev` from scratch and compare it with the incremental result. |
 | `-q, --quiet` | No messages. Otherwise, when stderr is a terminal, a progress line shows the current phase, how far along it is and the estimated time left. |
 
@@ -84,28 +85,28 @@ approach of loc-graph-action (`git checkout` + counting the tree for every
 commit), estimated from a sample of sequential steps spread over the history
 (20 for tokei, 6 for cloc) in a local clone.
 
-| Repository | Commits | counting-lines, cold | No new commits | One new commit | Checkout + tokei per commit | Checkout + cloc per commit |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| e2fsprogs | 5,554 | 6.2 s | 0.22 s | 0.24 s | ~7 min | ~37 min |
-| klipper | 6,342 | 6.5 s | 0.29 s | 0.31 s | ~22 min | ~3.1 h |
-| BambuStudio | 10,554 | 36 s | 0.68 s | 0.72 s | ~53 min | ~8.5 h |
+| Repository | Commits | counting-lines, cold | Cold, `-j 1` | No new commits | One new commit | Checkout + tokei per commit | Checkout + cloc per commit |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| e2fsprogs | 5,554 | 1.8 s | 6.2 s | 0.22 s | 0.24 s | ~7 min | ~37 min |
+| klipper | 6,342 | 2.0 s | 6.5 s | 0.29 s | 0.31 s | ~22 min | ~3.1 h |
+| BambuStudio | 10,554 | 7.7 s | 36 s | 0.68 s | 0.72 s | ~53 min | ~8.5 h |
 
-A cold run counts each distinct blob once; after that, only new commits are
-processed.
+A cold run counts each distinct blob once, spread over all CPU cores (`-j 1`
+uses a single process); after that, only new commits are processed.
 
 ### A single tree
 
 Counting the tree at `HEAD` once (best of three runs; cloc ran once).
 
-| Repository | tokei | cloc | counting-lines |
-| --- | ---: | ---: | ---: |
-| e2fsprogs | 0.02 s | 0.64 s | 0.18 s |
-| klipper | 0.29 s | 3.92 s | 2.76 s |
-| BambuStudio | 0.14 s | 4.42 s | 1.58 s |
+| Repository | tokei | cloc | counting-lines | counting-lines, `-j 1` |
+| --- | ---: | ---: | ---: | ---: |
+| e2fsprogs | 0.02 s | 0.64 s | 0.18 s | 0.18 s |
+| klipper | 0.29 s | 3.92 s | 1.22 s | 2.76 s |
+| BambuStudio | 0.14 s | 4.42 s | 0.88 s | 1.58 s |
 
 tokei (Rust, multi-threaded) is much faster on one tree. counting-lines is
-single-threaded Python; it wins over a history because it never recounts an
-unchanged file.
+Python; it wins over a history because it never recounts an unchanged file.
+Trees with fewer than 1,000 files (e2fsprogs) are counted in a single process.
 
 ### Agreement with tokei
 

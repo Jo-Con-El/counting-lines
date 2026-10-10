@@ -52,6 +52,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     out.add_argument("--date-format", help="strftime format for SVG date labels")
     p.add_argument("--check", action="store_true",
                    help="recount the tree at --rev from scratch and compare with the history")
+    p.add_argument("-j", "--jobs", type=int, default=os.cpu_count() or 1,
+                   help="processes counting new blobs in parallel (default: all CPUs)")
     p.add_argument("-q", "--quiet", action="store_true", help="no progress messages")
     return p.parse_args(argv)
 
@@ -71,14 +73,15 @@ def main(argv: list[str] | None = None) -> int:
                  else history.Cache(exclude, args.dedupe))
 
         started = time.monotonic()
-        points = history.update(args.repo, target, cache, log=log, progress=progress)
+        points = history.update(args.repo, target, cache, log=log, progress=progress,
+                                jobs=max(1, args.jobs))
         if progress:
             progress.finish()
         log(f"done in {time.monotonic() - started:.2f}s, {len(points)} commit(s) in history")
         if cache_path:
             cache.save(cache_path)
         if args.check:
-            expected = history.snapshot(args.repo, target, exclude, args.dedupe)
+            expected = history.snapshot(args.repo, target, exclude, args.dedupe, jobs=max(1, args.jobs))
             actual = points[-1].langs if points else {}
             if expected != actual:
                 print(f"counting-lines: check failed at {target[:12]}:\n"

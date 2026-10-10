@@ -163,3 +163,30 @@ def read_blobs(repo: str, shas: Iterable[str]) -> Iterator[tuple[str, bytes]]:
         writer.join()
         proc.stdout.close()
         proc.wait()
+
+
+class BlobReader:
+    """A long-lived ``git cat-file --batch``, read one blob at a time."""
+
+    def __init__(self, repo: str):
+        self.proc = subprocess.Popen(
+            ["git", "-C", repo, "cat-file", "--batch"],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        )
+
+    def read(self, sha: str) -> bytes:
+        assert self.proc.stdin is not None and self.proc.stdout is not None
+        self.proc.stdin.write(sha.encode() + b"\n")
+        self.proc.stdin.flush()
+        header = self.proc.stdout.readline().decode().split()
+        if len(header) != 3 or header[1] != "blob":
+            raise GitError(f"cat-file: unexpected reply for {sha}: {header}")
+        data = self.proc.stdout.read(int(header[2]))
+        self.proc.stdout.read(1)  # trailing LF
+        return data
+
+    def close(self) -> None:
+        assert self.proc.stdin is not None and self.proc.stdout is not None
+        self.proc.stdin.close()
+        self.proc.stdout.close()
+        self.proc.wait()
