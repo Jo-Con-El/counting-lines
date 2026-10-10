@@ -43,6 +43,7 @@ class Cache:
     """Everything needed to resume from ``head`` without rereading history."""
 
     exclude: list[str]
+    dedupe: bool = False  # count identical files once per commit
     head: str | None = None
     files: dict[str, str] = field(default_factory=dict)  # path -> blob sha
     blobs: dict[str, list[int] | None] = field(default_factory=dict)  # "sha:lang" -> stats, None if binary
@@ -56,23 +57,25 @@ class Cache:
         self.history = []
 
     @classmethod
-    def load(cls, path: str, exclude: list[str]) -> "Cache":
+    def load(cls, path: str, exclude: list[str], dedupe: bool = False) -> "Cache":
         try:
             with gzip.open(path, "rt", encoding="utf-8") as f:
                 data = json.load(f)
         except (FileNotFoundError, OSError, ValueError):
-            return cls(exclude)
+            return cls(exclude, dedupe)
         if data.get("version") != CACHE_VERSION or data.get("rules") != languages.RULES_VERSION:
-            return cls(exclude)
+            return cls(exclude, dedupe)
         cache = cls(
             exclude,
+            dedupe,
             head=data["head"],
             files=data["files"],
             blobs=data["blobs"],
             sniffed=data["sniffed"],
             history=[Point.from_json(p) for p in data["history"]],
         )
-        if data.get("exclude") != exclude:
+        # The history depends on these settings; the blob stats do not.
+        if data.get("exclude") != exclude or data.get("dedupe", False) != dedupe:
             cache.reset()
         return cache
 
@@ -82,6 +85,7 @@ class Cache:
             "version": CACHE_VERSION,
             "rules": languages.RULES_VERSION,
             "exclude": self.exclude,
+            "dedupe": self.dedupe,
             "head": self.head,
             "files": self.files,
             "blobs": self.blobs,
@@ -153,7 +157,7 @@ def _count_blobs(
                 blobs[key] = None if binary else languages.count(data, lang).as_list()
 
 
-def snapshot(repo: str, rev: str, exclude: list[str]) -> dict[str, list[int]]:
+def snapshot(repo: str, rev: str, exclude: list[str], dedupe: bool = False) -> dict[str, list[int]]:
     """Count a single tree from scratch, ignoring history and cache."""
     entries = []
     wanted: dict[str, set[str]] = {}
@@ -166,9 +170,14 @@ def snapshot(repo: str, rev: str, exclude: list[str]) -> dict[str, list[int]]:
     sniffed: dict = {}
     _count_blobs(repo, wanted, blobs, sniffed)
     totals: dict[str, list[int]] = {}
+    seen: set[tuple[str, str]] = set()
     for blob, path_lang in entries:
         if resolved := _resolve(blob, path_lang, blobs, sniffed):
             lang, stats = resolved
+            if dedupe:
+                if (blob, lang) in seen:
+                    continue
+                seen.add((blob, lang))
             acc = totals.setdefault(lang, [0, 0, 0])
             for i in range(3):
                 acc[i] += stats[i]
@@ -232,14 +241,25 @@ def update(
         log(f"reading {len(wanted)} new blob(s)")
     _count_blobs(repo, wanted, cache.blobs, cache.sniffed, progress)
 
-    # Replay the diffs, keeping running totals per language.
+    # Replay the diffs, keeping running totals per language. With dedupe, a
+    # blob counts when its first copy appears and stops with its last one.
     totals: dict[str, list[int]] = {}
+    copies: dict[tuple[str, str], int] = {}
 
     def apply(blob: str, path_lang: str, sign: int) -> None:
         resolved = _resolve(blob, path_lang, cache.blobs, cache.sniffed)
         if resolved is None:
             return
         lang, stats = resolved
+        if cache.dedupe:
+            key = (blob, lang)
+            n = copies.get(key, 0) + sign
+            if n:
+                copies[key] = n
+            else:
+                del copies[key]
+            if n != (1 if sign > 0 else 0):
+                return  # not the first copy added, nor the last one removed
         acc = totals.setdefault(lang, [0, 0, 0])
         for i in range(3):
             acc[i] += sign * stats[i]

@@ -32,6 +32,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
                         f"(default: {', '.join(history.DEFAULT_EXCLUDE)})")
     p.add_argument("--no-default-excludes", action="store_true",
                    help="do not apply the default exclusions")
+    p.add_argument("--dedupe", action="store_true",
+                   help="count identical files (same content and language) once per commit, like cloc")
     p.add_argument("-l", "--include-lang", metavar="LANGS",
                    help="comma-separated languages to report (e.g. 'Python,C'); default: all")
 
@@ -65,7 +67,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         target = git.rev_parse(args.repo, args.rev)
         cache_path = None if args.no_cache else (args.cache or default_cache_path(args.repo))
-        cache = history.Cache.load(cache_path, exclude) if cache_path else history.Cache(exclude)
+        cache = (history.Cache.load(cache_path, exclude, args.dedupe) if cache_path
+                 else history.Cache(exclude, args.dedupe))
 
         started = time.monotonic()
         points = history.update(args.repo, target, cache, log=log, progress=progress)
@@ -75,7 +78,7 @@ def main(argv: list[str] | None = None) -> int:
         if cache_path:
             cache.save(cache_path)
         if args.check:
-            expected = history.snapshot(args.repo, target, exclude)
+            expected = history.snapshot(args.repo, target, exclude, args.dedupe)
             actual = points[-1].langs if points else {}
             if expected != actual:
                 print(f"counting-lines: check failed at {target[:12]}:\n"

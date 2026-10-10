@@ -51,6 +51,7 @@ Main options:
 | `--cache FILE` / `--no-cache` | Where to keep the cache, or don't use one. |
 | `-x, --exclude PATTERN` | Exclude paths. Without `/` it matches any directory or file name (`node_modules`, `*.min.js`); with `/` it matches from the repository root (`docs/api`). Repeatable. |
 | `--no-default-excludes` | Don't apply the default exclusions (`package-lock.json`, `node_modules`, and `*.po`/`*.pot` translation catalogs). |
+| `--dedupe` | Count identical files (same content and language) only once per commit, like cloc does. Useful when a repository carries copies of the same files, such as backup folders. |
 | `-l, --include-lang LIST` | Report only these languages (`Python,C`). Applied when writing outputs; it does not invalidate the cache. |
 | `--json FILE` | Data as JSON, one point per line. |
 | `--js FILE` | The same data as `globalThis.LOC_DATA = …` (`--js-var` changes the name, `--js-esm` emits an ES module). |

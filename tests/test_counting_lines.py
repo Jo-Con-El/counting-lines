@@ -118,10 +118,10 @@ class HistoryTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def run_update(self, rev="HEAD", exclude=None, cache_path=None):
+    def run_update(self, rev="HEAD", exclude=None, cache_path=None, dedupe=False):
         exclude = exclude if exclude is not None else []
         path = cache_path or self.cache_path
-        cache = history.Cache.load(path, exclude)
+        cache = history.Cache.load(path, exclude, dedupe)
         target = git.rev_parse(self.repo.path, rev)
         points = history.update(self.repo.path, target, cache, log=lambda _: None)
         cache.save(path)
@@ -196,6 +196,31 @@ class HistoryTest(unittest.TestCase):
         points = self.run_update()
         self.assertEqual(len(points), 5)
         self.assert_matches_snapshots(points)
+
+    def test_dedupe_counts_identical_files_once(self):
+        r = self.repo
+        dump = "".join(f'{{"k": {i}}}\n' for i in range(100))
+        r.write("scene.json", dump)
+        r.write("backup/v1/scene.json", dump)
+        r.write("backup/v2/scene.json", dump)
+        r.write("a.py", "x = 1\n")
+        r.write("b/a.py", "x = 1\n")
+        r.commit("three copies")
+        r.write("backup/v2/scene.json", dump + '{"k": 100}\n')
+        r.commit("one copy diverges")
+        r.git("rm", "-q", "-r", "backup/v1")
+        r.commit("a duplicate goes away")
+        r.git("rm", "-q", "scene.json")
+        r.commit("the last copy of the original goes away")
+
+        points = [p["langs"] for p in self.run_update(dedupe=True)]
+        self.assertEqual([p["JSON"][0] for p in points], [100, 201, 201, 101])
+        self.assertEqual(points[0]["Python"], [1, 0, 0])
+        for p, sha in zip(points, self.repo.git("rev-list", "--reverse", "HEAD").split()):
+            self.assertEqual(p, history.snapshot(self.repo.path, sha, [], dedupe=True))
+
+        plain = [p["langs"]["JSON"][0] for p in self.run_update(dedupe=False)]
+        self.assertEqual(plain, [300, 301, 201, 101])
 
     def test_exclude_change_invalidates_history(self):
         self.build_history()
