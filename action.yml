@@ -57,8 +57,11 @@ inputs:
     description: "Count identical files once per commit"
     default: "false"
   commit:
-    description: "Commit and push the generated files if they changed (needs contents: write)"
+    description: "Commit and push the generated files to the current branch if they changed (needs contents: write)"
     default: "false"
+  branch:
+    description: "Publish the generated files to this branch instead, as its only commit, replaced on each update (needs contents: write; commit is then implied)"
+    default: ""
   commit-message:
     description: "Message for that commit"
     default: "Update lines-of-code chart [skip ci]"
@@ -111,5 +114,6 @@ runs:
         INPUT_JSON: ${{ inputs.json }}
         INPUT_JS: ${{ inputs.js }}
         INPUT_COMMIT: ${{ inputs.commit }}
+        INPUT_BRANCH: ${{ inputs.branch }}
         INPUT_COMMIT_MESSAGE: ${{ inputs.commit-message }}
       run: bash "${{ github.action_path }}/action/publish.sh"

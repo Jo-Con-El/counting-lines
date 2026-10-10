@@ -64,8 +64,8 @@ Main options:
 
 ## GitHub Action
 
-The repository is also a composite action. This workflow keeps
-`.github/loc-history.svg` up to date on every push to `main`:
+The repository is also a composite action. This workflow keeps a chart up to
+date on every push to `main`, published to a separate `counting-lines` branch:
 
 ```yaml
 name: Lines of code
@@ -75,9 +75,9 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write  # to commit the chart
+  contents: write  # to publish the chart
 
-concurrency: lines-of-code  # one run at a time, so pushes do not race
+concurrency: lines-of-code  # one run at a time
 
 jobs:
   chart:
@@ -88,26 +88,54 @@ jobs:
           fetch-depth: 0  # the action fetches the full history anyway, if needed
       - uses: Jo-Con-El/counting-lines@v1
         with:
-          svg: .github/loc-history.svg
-          commit: true
+          svg: loc-history.svg
+          branch: counting-lines
 ```
 
-Then show it in your README with `![Lines of code](.github/loc-history.svg)`.
+Then show it in your README with its URL on that branch:
+
+```markdown
+![Lines of code](https://raw.githubusercontent.com/<owner>/<repo>/counting-lines/loc-history.svg)
+```
+
+### Where to publish: `branch` or `commit`
+
+**Publishing to a separate branch is almost certainly what a maintainer wants.**
+With `branch`, the generated files become the only commit of that branch,
+replaced on every update. Your own branches never get a bot commit, so:
+
+- there is nothing to pull after each push (with `commit`, `main` gets one
+  extra commit per push and your next `git push` is rejected until you pull);
+- a push made while the action runs cannot make its push fail;
+- the branch never grows: old charts are not kept in its history, so the
+  repository does not get heavier with every run.
+
+The action refuses to replace a branch with history of its own, so a typo such
+as `branch: main` fails instead of overwriting it. GitHub caches images, so an
+updated chart may take a few minutes to show up in the README.
+
+With `commit: true` instead, the files are committed to the branch being built
+(e.g. `svg: .github/loc-history.svg` and `![Lines of code](.github/loc-history.svg)`).
+This keeps the chart next to the code, at the cost of the extra commits above.
+With neither, the files are only written to the workspace; the `changed`
+output says whether any of them changed, for workflows that publish them some
+other way.
+
+### Details
 
 - The cache is kept between runs with `actions/cache`, so each run only
   processes the new commits.
-- The generated files are never counted themselves, and a run whose last commit
-  only touches them (such as a scheduled run right after the previous chart
-  commit) changes nothing.
-- The chart commit is made by `github-actions[bot]` with `[skip ci]`; pushes
-  made with the default `GITHUB_TOKEN` do not trigger new workflow runs.
-- The `changed` output says whether any generated file changed, for workflows
-  that publish the files some other way (`commit: false`, the default).
+- The generated files are never counted themselves, and with `commit: true`, a
+  run whose last commit only touches them (such as a scheduled run right after
+  the previous chart commit) changes nothing.
+- Commits are made by `github-actions[bot]` with `[skip ci]`; pushes made with
+  the default `GITHUB_TOKEN` do not trigger new workflow runs.
 
 Inputs mirror the command line options: `path`, `rev`, `svg`, `json`, `js`,
-`theme`, `style`, `line-width`, `slopes`, `top`, `title`, `x-axis`, `date-format`, `exclude`
-(one pattern per line), `no-default-excludes`, `include-lang`, `dedupe`,
-`commit` and `commit-message`. See [action.yml](action.yml) for their defaults.
+`theme`, `style`, `line-width`, `slopes`, `top`, `title`, `x-axis`,
+`date-format`, `exclude` (one pattern per line), `no-default-excludes`,
+`include-lang`, `dedupe`, plus `branch`, `commit` and `commit-message`. See
+[action.yml](action.yml) for their defaults.
 
 ## Data format
 
