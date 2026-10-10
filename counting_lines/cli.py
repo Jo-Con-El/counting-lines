@@ -50,8 +50,9 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
                      help="SVG horizontal axis: commit time or commit index (default: time)")
     out.add_argument("--title", default="Lines of code over time", help="SVG title")
     out.add_argument("--date-format", help="strftime format for SVG date labels")
-    out.add_argument("--style", choices=["areas", "total"], default="areas",
-                     help="SVG: areas stacked by language (default), or one line with the total")
+    out.add_argument("--style", choices=["areas", "lines", "total"], default="areas",
+                     help="SVG: areas stacked by language (default), the same as lines, "
+                          "or one line with the total")
     out.add_argument("--slopes", action="store_true",
                      help="join commits with straight lines instead of steps in the SVG")
     p.add_argument("--check", action="store_true",

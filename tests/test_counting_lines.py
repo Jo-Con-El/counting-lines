@@ -327,6 +327,20 @@ class OutputTest(unittest.TestCase):
         one = export.build_data([history.Point("a" * 40, "2024-01-01T00:00:00+00:00", {"C": [1, 0, 0]})], "x")
         self.assertIn('class="ln-total"', svg.render(one, style="total"))
 
+    def test_svg_lines_style(self):
+        data = export.build_data([
+            history.Point("a" * 40, "2024-01-01T00:00:00+00:00", {"C": [10, 0, 0], "Go": [5, 0, 0]}),
+            history.Point("b" * 40, "2024-03-01T00:00:00+00:00", {"C": [30, 0, 0], "Go": [5, 0, 0]}),
+        ], "x")
+        doc = svg.render(data, style="lines")
+        self.assertEqual(doc.count("<path "), 2)
+        self.assertEqual(doc.count('fill="none"'), 2)
+        self.assertIn('class="ln0"', doc)
+        self.assertIn('class="ln1"', doc)
+        self.assertIn("<rect class=\"s0\"", doc)  # legend kept
+        top = svg.render(data, style="lines", top=1)
+        self.assertIn('class="ln-other"', top)
+
     def test_svg_handles_edge_cases(self):
         empty = {"languages": [], "points": []}
         self.assertIn("No data", svg.render(empty))

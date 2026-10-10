@@ -32,8 +32,10 @@ def _css(theme: str) -> str:
             f".grid{{stroke:{b['grid']}}}",
             f".s-other{{fill:{OTHER[mode]}}}",
             f".ln-total{{stroke:{PALETTE[mode][0]}}}",
+            f".ln-other{{stroke:{OTHER[mode]}}}",
         ]
         lines += [f".s{i}{{fill:{c}}}" for i, c in enumerate(PALETTE[mode])]
+        lines += [f".ln{i}{{stroke:{c}}}" for i, c in enumerate(PALETTE[mode])]
         return "".join(lines)
 
     if theme == "auto":
@@ -139,8 +141,9 @@ def render(
     slopes: bool = False,
     style: str = "areas",
 ) -> str:
-    """Render the chart. ``style`` is "areas" (stacked by language) or
-    "total" (a single line with the total, no legend)."""
+    """Render the chart. ``style`` is "areas" (stacked by language), "lines"
+    (the same stacking, drawn as one line per language) or "total" (a single
+    line with the total, no legend)."""
     points = data["points"]
     pad_l, pad_r, pad_t, pad_b = 52, 16, 40, 34
     legend_h = 22
@@ -253,18 +256,24 @@ def render(
             out.append(f"{x:.1f},{sy(level(row)):.1f}")
         return out
 
-    if style == "total":
-        line = steps(lambda row: row[-1])
+    def line_path(cls: str, idx: int) -> str:
+        """A stroked line along the top of stacked series ``idx``."""
+        line = steps(lambda row: row[idx])
         if len(xs) == 1:  # a single commit: draw a short tick
-            line = [f"{xs[0] - 2:.1f},{sy(stacks[0][-1]):.1f}", f"{xs[0] + 2:.1f},{sy(stacks[0][-1]):.1f}"]
-        parts.append(
-            f'<path class="ln-total" d="M{" L".join(line)}" fill="none" '
-            'stroke-width="2" stroke-linejoin="round"/>'
-        )
+            y = sy(stacks[0][idx])
+            line = [f"{xs[0] - 2:.1f},{y:.1f}", f"{xs[0] + 2:.1f},{y:.1f}"]
+        return (f'<path class="{cls}" d="M{" L".join(line)}" fill="none" '
+                'stroke-width="2" stroke-linejoin="round"/>')
+
+    if style == "total":
+        parts.append(line_path("ln-total", -1))
         series = []  # the title already shows the total; no legend
+    elif style == "lines":
+        for idx in reversed(range(len(series))):
+            parts.append(line_path(series[idx][1].replace("s", "ln", 1), idx))
 
     # Stacked areas, drawn top series first so lower ones overlay cleanly.
-    for idx in reversed(range(len(series))):
+    for idx in reversed(range(len(series)) if style == "areas" else []):
         upper = steps(lambda row: row[idx])
         lower = steps(lambda row: row[idx - 1] if idx else 0)
         if len(xs) == 1:  # a single commit: draw a thin bar
