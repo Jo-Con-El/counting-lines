@@ -217,7 +217,14 @@ def update(
     def read_log(base: str | None) -> list[git.Commit]:
         return _collect(git.first_parent_log(repo, target, base), progress)
 
-    commits = read_log(cache.head) if cache.head else []
+    commits = []
+    if cache.head:
+        try:
+            commits = read_log(cache.head)
+        except git.GitError:
+            # E.g. garbage-collected after a rebase, or a cache from another repository.
+            log(f"cached head {cache.head[:12]} does not exist in this repository; starting over")
+            cache.reset()
     if cache.head and (not commits or commits[0].parents[:1] != [cache.head]):
         log(f"cached head {cache.head[:12]} is not on the first-parent chain of {target[:12]}; starting over")
         cache.reset()

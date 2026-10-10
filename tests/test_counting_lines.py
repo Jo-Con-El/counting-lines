@@ -223,6 +223,17 @@ class HistoryTest(unittest.TestCase):
         plain = [p["langs"]["JSON"][0] for p in self.run_update(dedupe=False)]
         self.assertEqual(plain, [300, 301, 201, 101])
 
+    def test_cache_head_missing_from_repository(self):
+        self.build_history()
+        self.run_update()
+        other = Repo(os.path.join(self.tmp.name, "other"))
+        other.write("main.go", "package main\n")
+        other.commit()
+        self.repo = other  # same cache file, unrelated repository
+        points = self.run_update()
+        self.assertEqual(len(points), 1)
+        self.assert_matches_snapshots(points)
+
     def test_exclude_change_invalidates_history(self):
         self.build_history()
         self.run_update()
