@@ -8,6 +8,7 @@ import sys
 import time
 
 from . import export, git, history, svg
+from .progress import Progress
 
 
 def default_cache_path(repo: str) -> str:
@@ -55,7 +56,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    log = (lambda _msg: None) if args.quiet else (lambda msg: print(msg, file=sys.stderr))
+    progress = None if args.quiet else Progress()
+    log = progress.log if progress else (lambda _msg: None)
 
     exclude = ([] if args.no_default_excludes else list(history.DEFAULT_EXCLUDE)) + (args.exclude or [])
     include = [s.strip() for s in args.include_lang.split(",") if s.strip()] if args.include_lang else None
@@ -66,7 +68,9 @@ def main(argv: list[str] | None = None) -> int:
         cache = history.Cache.load(cache_path, exclude) if cache_path else history.Cache(exclude)
 
         started = time.monotonic()
-        points = history.update(args.repo, target, cache, log=log)
+        points = history.update(args.repo, target, cache, log=log, progress=progress)
+        if progress:
+            progress.finish()
         log(f"done in {time.monotonic() - started:.2f}s, {len(points)} commit(s) in history")
         if cache_path:
             cache.save(cache_path)
@@ -79,6 +83,8 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
             log(f"check OK at {target[:12]}")
     except git.GitError as e:
+        if progress:
+            progress.finish()
         print(f"counting-lines: {e}", file=sys.stderr)
         return 2
 

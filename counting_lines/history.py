@@ -8,7 +8,10 @@ import json
 import os
 import sys
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, Iterable
+
+# (phase, done, total or None); see progress.Progress.
+ProgressFn = Callable[[str, int, "int | None"], None]
 
 from . import git, languages
 
@@ -129,9 +132,14 @@ def _is_known(blob: str, path_lang: str, blobs: dict, sniffed: dict) -> bool:
     return f"{blob}:{path_lang}" in blobs
 
 
-def _count_blobs(repo: str, wanted: dict[str, set[str]], blobs: dict, sniffed: dict) -> None:
+def _count_blobs(
+    repo: str, wanted: dict[str, set[str]], blobs: dict, sniffed: dict,
+    progress: ProgressFn | None = None,
+) -> None:
     """Read and count ``wanted`` (blob -> path languages) in one cat-file stream."""
-    for sha, data in git.read_blobs(repo, wanted):
+    for done, (sha, data) in enumerate(git.read_blobs(repo, wanted), 1):
+        if progress:
+            progress("counting blobs", done, len(wanted))
         binary = languages.is_binary(data)
         langs = set(wanted[sha])
         if SNIFF in langs:
@@ -171,11 +179,23 @@ def _log(msg: str) -> None:
     print(msg, file=sys.stderr)
 
 
+def _collect(commits: Iterable[git.Commit], progress: ProgressFn | None) -> list[git.Commit]:
+    result = []
+    for commit in commits:
+        result.append(commit)
+        if progress:
+            progress("reading history", len(result), None)
+    if progress:
+        progress("reading history", len(result), len(result))
+    return result
+
+
 def update(
     repo: str,
     target: str,
     cache: Cache,
     log: Callable[[str], None] = _log,
+    progress: ProgressFn | None = None,
 ) -> list[Point]:
     """Bring ``cache`` up to ``target`` and return the history ending there."""
     if cache.head == target:
@@ -185,14 +205,17 @@ def update(
             # An older commit already in the history: no work, cache untouched.
             return cache.history[: i + 1]
 
-    commits = list(git.first_parent_log(repo, target, cache.head)) if cache.head else []
+    def read_log(base: str | None) -> list[git.Commit]:
+        return _collect(git.first_parent_log(repo, target, base), progress)
+
+    commits = read_log(cache.head) if cache.head else []
     if cache.head and (not commits or commits[0].parents[:1] != [cache.head]):
         log(f"cached head {cache.head[:12]} is not on the first-parent chain of {target[:12]}; starting over")
         cache.reset()
     if cache.head is None:
         if git.is_shallow(repo):
             log("warning: shallow repository, history starts at the shallow boundary")
-        commits = list(git.first_parent_log(repo, target))
+        commits = read_log(None)
 
     log(f"{len(commits)} new commit(s) to process")
 
@@ -207,7 +230,7 @@ def update(
 
     if wanted:
         log(f"reading {len(wanted)} new blob(s)")
-    _count_blobs(repo, wanted, cache.blobs, cache.sniffed)
+    _count_blobs(repo, wanted, cache.blobs, cache.sniffed, progress)
 
     # Replay the diffs, keeping running totals per language.
     totals: dict[str, list[int]] = {}
@@ -224,7 +247,9 @@ def update(
     for path, blob in cache.files.items():
         apply(blob, path_language(path, cache.exclude), +1)
 
-    for commit in commits:
+    for done, commit in enumerate(commits, 1):
+        if progress:
+            progress("replaying commits", done, len(commits))
         for change in commit.changes:
             path_lang = path_language(change.path, cache.exclude)
             if path_lang is None:

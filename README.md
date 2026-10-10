@@ -56,6 +56,7 @@ Main options:
 | `--js FILE` | The same data as `globalThis.LOC_DATA = …` (`--js-var` changes the name, `--js-esm` emits an ES module). |
 | `--svg FILE` | Stacked area chart by language. `--theme auto` follows `prefers-color-scheme`; `light` and `dark` are also available. See also `--top N`, `--x-axis time\|commits`, `--title`, `--date-format`. |
 | `--check` | Recount the tree at `--rev` from scratch and compare it with the incremental result. |
+| `-q, --quiet` | No messages. Otherwise, when stderr is a terminal, a progress line shows the current phase, how far along it is and the estimated time left. |
 
 ## Data format
 

@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import subprocess
@@ -5,6 +6,7 @@ import tempfile
 import unittest
 
 from counting_lines import cli, export, git, history, languages, svg
+from counting_lines.progress import Progress
 
 
 class Repo:
@@ -235,6 +237,54 @@ class OutputTest(unittest.TestCase):
         self.assertIn("No data", svg.render(empty))
         one = export.build_data([history.Point("a" * 40, "2024-01-01T00:00:00+00:00", {"C": [5, 0, 0]})], "x")
         self.assertIn("<path", svg.render(one))
+
+
+class FakeTTY(io.StringIO):
+    def isatty(self):
+        return True
+
+
+class ProgressTest(unittest.TestCase):
+    def test_redraws_in_place_and_keeps_finished_phases(self):
+        out = FakeTTY()
+        p = Progress(out, interval=0)
+        p("reading history", 1)
+        p("reading history", 2, 2)
+        p.log("2 new commits")
+        p("counting blobs", 1, 3)
+        p.log("note")  # mid-phase: the unfinished line is cleared, not kept
+        p("counting blobs", 3, 3)
+        p.finish()
+        self.assertEqual(out.getvalue(), (
+            "\r\x1b[Kreading history: 1"
+            "\r\x1b[Kreading history: 2/2 (100%)\n"
+            "2 new commits\n"
+            "\r\x1b[Kcounting blobs: 1/3 (33%)"
+            "\r\x1b[Knote\n"
+            "\r\x1b[Kcounting blobs: 3/3 (100%)\n"
+        ))
+
+    def test_silent_when_not_a_terminal(self):
+        out = io.StringIO()
+        p = Progress(out, interval=0)
+        p("counting blobs", 1, 2)
+        p.finish()
+        self.assertEqual(out.getvalue(), "")
+
+    def test_update_reports_every_phase(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        repo = Repo(os.path.join(tmp.name, "repo"))
+        repo.write("a.py", "x = 1\n")
+        repo.commit()
+        repo.write("b.py", "y = 2\n")
+        repo.commit()
+        calls = []
+        history.update(repo.path, git.rev_parse(repo.path, "HEAD"), history.Cache([]),
+                       log=lambda _: None, progress=lambda *a: calls.append(a))
+        self.assertEqual(calls[-3:], [("counting blobs", 2, 2), ("replaying commits", 1, 2),
+                                      ("replaying commits", 2, 2)])
+        self.assertIn(("reading history", 2, 2), calls)
 
 
 if __name__ == "__main__":
