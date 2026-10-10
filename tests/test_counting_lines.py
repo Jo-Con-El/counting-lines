@@ -353,6 +353,16 @@ class OutputTest(unittest.TestCase):
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
             cli.parse_args(["--line-width", "0"])
 
+    def test_svg_lumps_vanished_languages(self):
+        data = export.build_data([
+            history.Point("a" * 40, "2024-01-01T00:00:00+00:00", {"C": [5, 0, 0], "XML": [1, 0, 0]}),
+            history.Point("b" * 40, "2024-01-02T00:00:00+00:00", {"C": [7, 0, 0]}),
+        ], "x")
+        doc = svg.render(data)
+        self.assertIn(">C 7<", doc)
+        self.assertNotIn("XML", doc)
+        self.assertIn(">Other<", doc)
+
     def test_svg_handles_edge_cases(self):
         empty = {"languages": [], "points": []}
         self.assertIn("No data", svg.render(empty))

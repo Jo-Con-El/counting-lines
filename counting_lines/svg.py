@@ -164,9 +164,12 @@ def render(
     if not points:
         return head + f'<text class="muted" x="{pad_l}" y="{height / 2}" font-size="12">No data</text></svg>\n'
 
-    # Series: the top languages at the last point, everything else lumped.
-    shown = data["languages"][:top]
-    rest = data["languages"][top:]
+    # Series: the top languages at the last point, everything else lumped,
+    # including languages that are gone by then (e.g. removed files).
+    last_langs = points[-1]["langs"]
+    current = [lang for lang in data["languages"] if last_langs.get(lang, [0])[0]]
+    shown = current[:top]
+    rest = [lang for lang in data["languages"] if lang not in shown]
     series = [(lang, f"s{i}") for i, lang in enumerate(shown)]
     if rest:
         series.append(("Other", "s-other"))
@@ -300,7 +303,7 @@ def render(
     lx, ly = x0, height + 8
     last_vals = values(points[-1])
     for (name, cls), v in zip(series, last_vals):
-        label = f"{name} {fmt_num(v)}"
+        label = f"{name} {fmt_num(v)}" if v else name  # "Other" may be all gone
         parts.append(f'<rect class="{cls}" x="{lx}" y="{ly - 9}" width="10" height="10" rx="2"/>')
         parts.append(f'<text class="fg" x="{lx + 14}" y="{ly}" font-size="11">{escape(label)}</text>')
         lx += 22 + 6.5 * len(label)
