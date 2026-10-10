@@ -8,7 +8,9 @@ import os
 from .history import Point
 
 
-def build_data(history: list[Point], rev: str, include_lang: list[str] | None = None) -> dict:
+def build_data(
+    history: list[Point], rev: str, include_lang: list[str] | None = None, project: str = "",
+) -> dict:
     """Plain, self-describing data for consumers (charts, dashboards...).
 
     ``languages`` is ordered by code lines at the last point, descending.
@@ -32,6 +34,7 @@ def build_data(history: list[Point], rev: str, include_lang: list[str] | None = 
     order = sorted(seen, key=lambda lang: (-last.get(lang, [0])[0], lang))
     return {
         "generator": "counting-lines",
+        "project": project,
         "rev": rev,
         "languages": order,
         "points": points,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import threading
 from dataclasses import dataclass, field
@@ -38,6 +39,17 @@ def git(repo: str, *args: str) -> str:
     if proc.returncode != 0:
         raise GitError(f"git {' '.join(args)}: {proc.stderr.strip()}")
     return proc.stdout.strip()
+
+
+def project_name(repo: str) -> str:
+    """The repository's name: from the origin remote, else its directory."""
+    try:
+        url = git(repo, "remote", "get-url", "origin")
+    except GitError:
+        url = ""
+    name = url.rstrip("/").rsplit("/", 1)[-1].rsplit(":", 1)[-1]
+    name = name[:-4] if name.endswith(".git") else name
+    return name or os.path.basename(git(repo, "rev-parse", "--show-toplevel"))
 
 
 def rev_parse(repo: str, rev: str) -> str:

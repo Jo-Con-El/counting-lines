@@ -363,6 +363,22 @@ class OutputTest(unittest.TestCase):
         self.assertNotIn("XML", doc)
         self.assertIn(">Other<", doc)
 
+    def test_svg_project_name(self):
+        point = history.Point("a" * 40, "2024-01-01T00:00:00+00:00", {"C": [1, 0, 0]})
+        doc = svg.render(export.build_data([point], "x", project="demo<"), title="LoC")
+        self.assertIn('aria-label="demo&lt;: LoC"', doc)
+        self.assertIn('>demo&lt;</tspan><tspan class="muted"> · LoC</tspan>', doc)
+        self.assertNotIn(" · ", svg.render(export.build_data([point], "x"), title="LoC"))
+
+    def test_project_name_from_remote(self):
+        with tempfile.TemporaryDirectory() as d:
+            subprocess.run(["git", "init", "-q", d], check=True)
+            self.assertEqual(git.project_name(d), os.path.basename(os.path.realpath(d)))
+            for url in ("git@github.com:o/name.git", "https://github.com/o/name/", "host:name"):
+                subprocess.run(["git", "-C", d, "remote", "remove", "origin"], capture_output=True)
+                subprocess.run(["git", "-C", d, "remote", "add", "origin", url], check=True)
+                self.assertEqual(git.project_name(d), "name", url)
+
     def test_svg_handles_edge_cases(self):
         empty = {"languages": [], "points": []}
         self.assertIn("No data", svg.render(empty))

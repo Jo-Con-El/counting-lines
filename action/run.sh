@@ -46,6 +46,7 @@ done
 [ -n "${INPUT_JS:-}" ] && args+=(--js "$INPUT_JS")
 args+=(--theme "${INPUT_THEME:-auto}" --style "${INPUT_STYLE:-areas}" --top "${INPUT_TOP:-6}"
        --title "${INPUT_TITLE:-Lines of code over time}" --x-axis "${INPUT_X_AXIS:-time}")
+args+=(--project "${INPUT_PROJECT:-${GITHUB_REPOSITORY##*/}}")
 [ -n "${INPUT_DATE_FORMAT:-}" ] && args+=(--date-format "$INPUT_DATE_FORMAT")
 [ -n "${INPUT_INCLUDE_LANG:-}" ] && args+=(--include-lang "$INPUT_INCLUDE_LANG")
 [ "${INPUT_SLOPES:-false}" = "true" ] && args+=(--slopes)

@@ -154,12 +154,18 @@ def render(
     pad_l, pad_r, pad_t, pad_b = 52, 16, 40, 34
     legend_h = 22
     h_total = height + legend_h
+    project = data.get("project", "")
+    heading = f'<tspan font-weight="600">{escape(title)}</tspan>'
+    if project:
+        heading = (f'<tspan font-weight="600">{escape(project)}</tspan>'
+                   f'<tspan class="muted"> · {escape(title)}</tspan>')
     head = (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{h_total}" '
-        f'viewBox="0 0 {width} {h_total}" role="img" aria-label="{escape(title)}">'
+        f'viewBox="0 0 {width} {h_total}" role="img" '
+        f'aria-label="{escape(f"{project}: {title}" if project else title)}">'
         f"<style>{_css(theme)}</style>"
         f'<rect class="bg" width="100%" height="100%" rx="6"/>'
-        f'<text class="fg" x="{pad_l}" y="24" font-size="14" font-weight="600">{escape(title)}</text>'
+        f'<text class="fg" x="{pad_l}" y="24" font-size="14">{heading}</text>'
     )
     if not points:
         return head + f'<text class="muted" x="{pad_l}" y="{height / 2}" font-size="12">No data</text></svg>\n'

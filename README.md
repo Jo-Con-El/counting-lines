@@ -57,7 +57,7 @@ Main options:
 | `-l, --include-lang LIST` | Report only these languages (`Python,C`). Applied when writing outputs; it does not invalidate the cache. |
 | `--json FILE` | Data as JSON, one point per line. |
 | `--js FILE` | The same data as `globalThis.LOC_DATA = …` (`--js-var` changes the name, `--js-esm` emits an ES module). |
-| `--svg FILE` | Stacked area chart by language. `--theme auto` follows `prefers-color-scheme`; `light` and `dark` are also available. `--style lines` draws the same stacking as one line per language instead of filled areas, and `--style total` draws only the total as a line; `--line-width PX` sets the thickness of those lines (default 2). Counts are drawn as steps, since they only change at commits; `--slopes` joins commits with straight lines instead. See also `--top N`, `--x-axis time\|commits`, `--title`, `--date-format`. |
+| `--svg FILE` | Stacked area chart by language. `--theme auto` follows `prefers-color-scheme`; `light` and `dark` are also available. `--style lines` draws the same stacking as one line per language instead of filled areas, and `--style total` draws only the total as a line; `--line-width PX` sets the thickness of those lines (default 2). Counts are drawn as steps, since they only change at commits; `--slopes` joins commits with straight lines instead. The title starts with the project name, taken from the `origin` remote (or the directory name); `--project NAME` sets another one, `--project ''` leaves it out. See also `--top N`, `--x-axis time\|commits`, `--title`, `--date-format`. |
 | `-j, --jobs N` | Processes counting new blobs in parallel (default: all CPU cores). Each one keeps its own `git cat-file`; small incremental runs stay in a single process. |
 | `--check` | Recount the tree at `--rev` from scratch and compare it with the incremental result. |
 | `-q, --quiet` | No messages. Otherwise, when stderr is a terminal, a progress line shows the current phase, how far along it is and the estimated time left. |
@@ -132,7 +132,7 @@ other way.
   the default `GITHUB_TOKEN` do not trigger new workflow runs.
 
 Inputs mirror the command line options: `path`, `rev`, `svg`, `json`, `js`,
-`theme`, `style`, `line-width`, `slopes`, `top`, `title`, `x-axis`,
+`theme`, `style`, `line-width`, `slopes`, `top`, `project`, `title`, `x-axis`,
 `date-format`, `exclude` (one pattern per line), `no-default-excludes`,
 `include-lang`, `dedupe`, plus `branch`, `commit` and `commit-message`. See
 [action.yml](action.yml) for their defaults.
@@ -140,7 +140,7 @@ Inputs mirror the command line options: `path`, `rev`, `svg`, `json`, `js`,
 ## Data format
 
 ```json
-{"generator": "counting-lines", "rev": "<sha>",
+{"generator": "counting-lines", "project": "my-project", "rev": "<sha>",
  "languages": ["C", "Python"],
  "points": [
   {"sha": "…", "date": "2024-01-01T00:00:00+00:00", "code": 120, "comment": 30, "blank": 15,

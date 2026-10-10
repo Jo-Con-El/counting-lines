@@ -55,6 +55,9 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     out.add_argument("--top", type=int, default=6, help="languages shown in the SVG before 'Other'")
     out.add_argument("--x-axis", choices=["time", "commits"], default="time",
                      help="SVG horizontal axis: commit time or commit index (default: time)")
+    out.add_argument("--project", metavar="NAME",
+                     help="project name for the SVG title and the data "
+                          "(default: from the origin remote, else the directory; '' for none)")
     out.add_argument("--title", default="Lines of code over time", help="SVG title")
     out.add_argument("--date-format", help="strftime format for SVG date labels")
     out.add_argument("--style", choices=["areas", "lines", "total"], default="areas",
@@ -108,7 +111,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"counting-lines: {e}", file=sys.stderr)
         return 2
 
-    data = export.build_data(points, target, include)
+    project = args.project
+    if project is None:
+        try:
+            project = git.project_name(args.repo)
+        except git.GitError:
+            project = ""
+    data = export.build_data(points, target, include, project)
     if args.json:
         export.write_json(data, args.json)
     if args.js:

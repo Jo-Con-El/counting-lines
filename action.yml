@@ -35,6 +35,9 @@ inputs:
   top:
     description: "Languages shown before grouping the rest as 'Other'"
     default: "6"
+  project:
+    description: "Project name shown in the SVG title (empty: the repository's name)"
+    default: ""
   title:
     description: "SVG title"
     default: "Lines of code over time"
@@ -97,6 +100,7 @@ runs:
         INPUT_SLOPES: ${{ inputs.slopes }}
         INPUT_LINE_WIDTH: ${{ inputs.line-width }}
         INPUT_TOP: ${{ inputs.top }}
+        INPUT_PROJECT: ${{ inputs.project }}
         INPUT_TITLE: ${{ inputs.title }}
         INPUT_X_AXIS: ${{ inputs.x-axis }}
         INPUT_DATE_FORMAT: ${{ inputs.date-format }}
