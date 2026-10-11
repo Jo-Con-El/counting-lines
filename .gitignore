@@ -5,3 +5,4 @@ __pycache__/
 build/
 dist/
 *.swp
+examples/loc.js

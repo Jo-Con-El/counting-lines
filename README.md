@@ -151,6 +151,15 @@ Inputs mirror the command line options: `path`, `rev`, `svg`, `json`, `js`,
 `languages` is ordered by lines of code at the last commit. Each `langs` entry
 is `[code, comment, blank]`.
 
+[examples/index.html](examples/index.html) is a dependency-free page that draws
+the `--js` data as an interactive chart: code, comment or blank lines,
+languages that can be toggled, and the commit under the pointer. Generate the
+data next to it and open it in a browser:
+
+```bash
+python3 -m counting_lines /path/to/repo --js examples/loc.js
+```
+
 ## Comparison with tokei and cloc
 
 Measured on an Apple M5 (10 cores) with git 2.55, tokei 15.0.0 and cloc 2.10.
